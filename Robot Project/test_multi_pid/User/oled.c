@@ -1,0 +1,470 @@
+#include "oled.h"
+#include "i2c.h"
+#include "string.h"
+
+
+static uint8_t OLED_Buffer[8][128];
+
+
+static HAL_StatusTypeDef OLED_WriteCommand(uint8_t command)
+{
+    uint8_t packet[2];
+
+    packet[0] = 0x00;
+    packet[1] = command;
+
+    return HAL_I2C_Master_Transmit(
+        &hi2c2,
+        (uint16_t)(OLED_ADDRESS << 1),
+        packet,
+        2,
+        50);
+}
+
+
+HAL_StatusTypeDef OLED_Check(void)
+{
+    return HAL_I2C_IsDeviceReady(
+        &hi2c2,
+        (uint16_t)(OLED_ADDRESS << 1),
+        3,
+        50);
+}
+
+
+HAL_StatusTypeDef OLED_Update(void)
+{
+    uint8_t page;
+    uint8_t packet[129];
+    HAL_StatusTypeDef status;
+
+    packet[0] = 0x40;
+
+    for (page = 0; page < 8; page++)
+    {
+       
+        status = OLED_WriteCommand((uint8_t)(0xB0 + page));
+        if (status != HAL_OK)
+        {
+            return status;
+        }
+
+        
+        status = OLED_WriteCommand(0x00);
+        if (status != HAL_OK)
+        {
+            return status;
+        }
+
+        status = OLED_WriteCommand(0x10);
+        if (status != HAL_OK)
+        {
+            return status;
+        }
+
+        memcpy(&packet[1], OLED_Buffer[page], 128);
+
+        status = HAL_I2C_Master_Transmit(
+            &hi2c2,
+            (uint16_t)(OLED_ADDRESS << 1),
+            packet,
+            (uint16_t)sizeof(packet),
+            100);
+
+        if (status != HAL_OK)
+        {
+            return status;
+        }
+    }
+
+    return HAL_OK;
+}
+
+
+HAL_StatusTypeDef OLED_Init(void)
+{
+    uint16_t i;
+    HAL_StatusTypeDef status;
+
+    static const uint8_t commands[] =
+    {
+        0xAE,            
+
+        0x20, 0x02,       
+
+        0xD5, 0x80,       
+        0xA8, 0x3F,       
+        0xD3, 0x00,       
+        0x40,            
+
+        0xA1,             
+        0xC8,             
+        0xDA, 0x12,      
+
+        0x81, 0xCF,       
+        0xD9, 0xF1,      
+        0xDB, 0x30,      
+
+        0xA4,          
+        0xA6,            
+        0x8D, 0x14        
+    };
+
+    HAL_Delay(100);
+
+    status = OLED_Check();
+    if (status != HAL_OK)
+    {
+        return status;
+    }
+
+    for (i = 0; i < sizeof(commands); i++)
+    {
+        status = OLED_WriteCommand(commands[i]);
+
+        if (status != HAL_OK)
+        {
+            return status;
+        }
+    }
+
+    OLED_Clear();
+
+    status = OLED_Update();
+    if (status != HAL_OK)
+    {
+        return status;
+    }
+
+    return OLED_WriteCommand(0xAF);
+}
+
+
+void OLED_Clear(void)
+{
+    memset(OLED_Buffer, 0, sizeof(OLED_Buffer));
+}
+
+
+void OLED_Fill(uint8_t on)
+{
+    memset(OLED_Buffer,
+           on ? 0xFF : 0x00,
+           sizeof(OLED_Buffer));
+}
+
+
+void OLED_DrawPixel(uint8_t x, uint8_t y, uint8_t on)
+{
+    uint8_t page;
+    uint8_t mask;
+
+    if (x >= OLED_WIDTH || y >= OLED_HEIGHT)
+    {
+        return;
+    }
+
+    page = (uint8_t)(y / 8);
+    mask = (uint8_t)(1U << (y % 8));
+
+    if (on)
+    {
+        OLED_Buffer[page][x] |= mask;
+    }
+    else
+    {
+        OLED_Buffer[page][x] &= (uint8_t)(~mask); 
+    }
+}
+
+
+void OLED_DrawRectangle(uint8_t x, uint8_t y,
+                        uint8_t width, uint8_t height,
+                        uint8_t on)
+{
+    uint16_t xx;
+    uint16_t yy;
+    uint16_t right;
+    uint16_t bottom;
+
+    if (width == 0 || height == 0 ||
+        x >= OLED_WIDTH || y >= OLED_HEIGHT)
+    {
+        return;
+    }
+
+    right = (uint16_t)x + width - 1;
+    bottom = (uint16_t)y + height - 1;
+
+    for (xx = x; xx <= right && xx < OLED_WIDTH; xx++)
+    {
+        OLED_DrawPixel((uint8_t)xx, y, on);
+
+        if (bottom < OLED_HEIGHT)
+        {
+            OLED_DrawPixel((uint8_t)xx, (uint8_t)bottom, on);
+        }
+    }
+
+    for (yy = y; yy <= bottom && yy < OLED_HEIGHT; yy++)
+    {
+        OLED_DrawPixel(x, (uint8_t)yy, on);
+
+        if (right < OLED_WIDTH)
+        {
+            OLED_DrawPixel((uint8_t)right, (uint8_t)yy, on);
+        }
+    }
+}
+
+void OLED_ShowHelloWorld(uint8_t x, uint8_t y)
+{
+    static const uint8_t letters[11][5] =
+    {
+        {0x7F, 0x08, 0x04, 0x04, 0x78}, /* h */
+        {0x38, 0x54, 0x54, 0x54, 0x18}, /* e */
+        {0x00, 0x41, 0x7F, 0x40, 0x00}, /* l */
+        {0x00, 0x41, 0x7F, 0x40, 0x00}, /* l */
+        {0x38, 0x44, 0x44, 0x44, 0x38}, /* o */
+        {0x00, 0x00, 0x00, 0x00, 0x00}, /* �ո� */
+        {0x3C, 0x40, 0x30, 0x40, 0x3C}, /* w */
+        {0x38, 0x44, 0x44, 0x44, 0x38}, /* o */
+        {0x7C, 0x08, 0x04, 0x04, 0x08}, /* r */
+        {0x00, 0x41, 0x7F, 0x40, 0x00}, /* l */
+        {0x38, 0x44, 0x44, 0x48, 0x7F}  /* d */
+    };
+
+    uint8_t letter;
+    uint8_t col;
+    uint8_t row;
+    uint16_t px;
+    uint16_t py;
+
+    for (letter = 0; letter < 11; letter++)
+    {
+       
+        for (col = 0; col < 6; col++)
+        {
+            for (row = 0; row < 7; row++)
+            {
+                px = (uint16_t)x + letter * 6 + col;
+                py = (uint16_t)y + row;
+
+                if (px < OLED_WIDTH && py < OLED_HEIGHT)
+                {
+                    OLED_DrawPixel(
+                        (uint8_t)px,
+                        (uint8_t)py,
+                        (col < 5)
+                            ? ((letters[letter][col] >> row) & 1U)
+                            : 0);
+                }
+            }
+        }
+    }
+}
+
+/* ASCII 0x20～0x7E，共95个字符。
+   每个字符5列，每列低7位表示竖直方向的像素。 */
+static const uint8_t OLED_Font5x7[95][5] =
+{
+    {0x00,0x00,0x00,0x00,0x00}, /* space */
+    {0x00,0x00,0x5F,0x00,0x00}, /* ! */
+    {0x00,0x07,0x00,0x07,0x00}, /* " */
+    {0x14,0x7F,0x14,0x7F,0x14}, /* # */
+    {0x24,0x2A,0x7F,0x2A,0x12}, /* $ */
+    {0x23,0x13,0x08,0x64,0x62}, /* % */
+    {0x36,0x49,0x55,0x22,0x50}, /* & */
+    {0x00,0x05,0x03,0x00,0x00}, /* ' */
+    {0x00,0x1C,0x22,0x41,0x00}, /* ( */
+    {0x00,0x41,0x22,0x1C,0x00}, /* ) */
+    {0x14,0x08,0x3E,0x08,0x14}, /* * */
+    {0x08,0x08,0x3E,0x08,0x08}, /* + */
+    {0x00,0x50,0x30,0x00,0x00}, /* , */
+    {0x08,0x08,0x08,0x08,0x08}, /* - */
+    {0x00,0x60,0x60,0x00,0x00}, /* . */
+    {0x20,0x10,0x08,0x04,0x02}, /* / */
+
+    {0x3E,0x51,0x49,0x45,0x3E}, /* 0 */
+    {0x00,0x42,0x7F,0x40,0x00}, /* 1 */
+    {0x42,0x61,0x51,0x49,0x46}, /* 2 */
+    {0x21,0x41,0x45,0x4B,0x31}, /* 3 */
+    {0x18,0x14,0x12,0x7F,0x10}, /* 4 */
+    {0x27,0x45,0x45,0x45,0x39}, /* 5 */
+    {0x3C,0x4A,0x49,0x49,0x30}, /* 6 */
+    {0x01,0x71,0x09,0x05,0x03}, /* 7 */
+    {0x36,0x49,0x49,0x49,0x36}, /* 8 */
+    {0x06,0x49,0x49,0x29,0x1E}, /* 9 */
+
+    {0x00,0x36,0x36,0x00,0x00}, /* : */
+    {0x00,0x56,0x36,0x00,0x00}, /* ; */
+    {0x08,0x14,0x22,0x41,0x00}, /* < */
+    {0x14,0x14,0x14,0x14,0x14}, /* = */
+    {0x00,0x41,0x22,0x14,0x08}, /* > */
+    {0x02,0x01,0x51,0x09,0x06}, /* ? */
+    {0x32,0x49,0x79,0x41,0x3E}, /* @ */
+
+    {0x7E,0x11,0x11,0x11,0x7E}, /* A */
+    {0x7F,0x49,0x49,0x49,0x36}, /* B */
+    {0x3E,0x41,0x41,0x41,0x22}, /* C */
+    {0x7F,0x41,0x41,0x22,0x1C}, /* D */
+    {0x7F,0x49,0x49,0x49,0x41}, /* E */
+    {0x7F,0x09,0x09,0x09,0x01}, /* F */
+    {0x3E,0x41,0x49,0x49,0x7A}, /* G */
+    {0x7F,0x08,0x08,0x08,0x7F}, /* H */
+    {0x00,0x41,0x7F,0x41,0x00}, /* I */
+    {0x20,0x40,0x41,0x3F,0x01}, /* J */
+    {0x7F,0x08,0x14,0x22,0x41}, /* K */
+    {0x7F,0x40,0x40,0x40,0x40}, /* L */
+    {0x7F,0x02,0x0C,0x02,0x7F}, /* M */
+    {0x7F,0x04,0x08,0x10,0x7F}, /* N */
+    {0x3E,0x41,0x41,0x41,0x3E}, /* O */
+    {0x7F,0x09,0x09,0x09,0x06}, /* P */
+    {0x3E,0x41,0x51,0x21,0x5E}, /* Q */
+    {0x7F,0x09,0x19,0x29,0x46}, /* R */
+    {0x46,0x49,0x49,0x49,0x31}, /* S */
+    {0x01,0x01,0x7F,0x01,0x01}, /* T */
+    {0x3F,0x40,0x40,0x40,0x3F}, /* U */
+    {0x1F,0x20,0x40,0x20,0x1F}, /* V */
+    {0x3F,0x40,0x38,0x40,0x3F}, /* W */
+    {0x63,0x14,0x08,0x14,0x63}, /* X */
+    {0x07,0x08,0x70,0x08,0x07}, /* Y */
+    {0x61,0x51,0x49,0x45,0x43}, /* Z */
+
+    {0x00,0x7F,0x41,0x41,0x00}, /* [ */
+    {0x02,0x04,0x08,0x10,0x20}, /* backslash */
+    {0x00,0x41,0x41,0x7F,0x00}, /* ] */
+    {0x04,0x02,0x01,0x02,0x04}, /* ^ */
+    {0x40,0x40,0x40,0x40,0x40}, /* _ */
+    {0x00,0x01,0x02,0x04,0x00}, /* ` */
+
+    {0x20,0x54,0x54,0x54,0x78}, /* a */
+    {0x7F,0x48,0x44,0x44,0x38}, /* b */
+    {0x38,0x44,0x44,0x44,0x20}, /* c */
+    {0x38,0x44,0x44,0x48,0x7F}, /* d */
+    {0x38,0x54,0x54,0x54,0x18}, /* e */
+    {0x08,0x7E,0x09,0x01,0x02}, /* f */
+    {0x0C,0x52,0x52,0x52,0x3E}, /* g */
+    {0x7F,0x08,0x04,0x04,0x78}, /* h */
+    {0x00,0x44,0x7D,0x40,0x00}, /* i */
+    {0x20,0x40,0x44,0x3D,0x00}, /* j */
+    {0x7F,0x10,0x28,0x44,0x00}, /* k */
+    {0x00,0x41,0x7F,0x40,0x00}, /* l */
+    {0x7C,0x04,0x18,0x04,0x78}, /* m */
+    {0x7C,0x08,0x04,0x04,0x78}, /* n */
+    {0x38,0x44,0x44,0x44,0x38}, /* o */
+    {0x7C,0x14,0x14,0x14,0x08}, /* p */
+    {0x08,0x14,0x14,0x18,0x7C}, /* q */
+    {0x7C,0x08,0x04,0x04,0x08}, /* r */
+    {0x48,0x54,0x54,0x54,0x20}, /* s */
+    {0x04,0x3F,0x44,0x40,0x20}, /* t */
+    {0x3C,0x40,0x40,0x20,0x7C}, /* u */
+    {0x1C,0x20,0x40,0x20,0x1C}, /* v */
+    {0x3C,0x40,0x30,0x40,0x3C}, /* w */
+    {0x44,0x28,0x10,0x28,0x44}, /* x */
+    {0x0C,0x50,0x50,0x50,0x3C}, /* y */
+    {0x44,0x64,0x54,0x4C,0x44}, /* z */
+
+    {0x00,0x08,0x36,0x41,0x00}, /* { */
+    {0x00,0x00,0x7F,0x00,0x00}, /* | */
+    {0x00,0x41,0x36,0x08,0x00}, /* } */
+    {0x08,0x04,0x08,0x10,0x08}  /* ~ */
+};
+
+/* 显示一个字符，占用6×8像素。
+   x、y均为像素坐标。 */
+void OLED_ShowChar(uint8_t x, uint8_t y, char ch)
+{
+    uint8_t code;
+    uint8_t col;
+    uint8_t row;
+    uint8_t bits;
+    uint16_t px;
+    uint16_t py;
+
+    code = (uint8_t)ch;
+
+    if (code < 32 || code > 126)
+    {
+        code = '?';
+    }
+
+    for (col = 0; col < 6; col++)
+    {
+        bits = (col < 5)
+             ? OLED_Font5x7[code - 32][col]
+             : 0;
+
+        for (row = 0; row < 8; row++)
+        {
+            px = (uint16_t)x + col;
+            py = (uint16_t)y + row;
+
+            if (px < OLED_WIDTH && py < OLED_HEIGHT)
+            {
+                OLED_DrawPixel(
+                    (uint8_t)px,
+                    (uint8_t)py,
+                    (uint8_t)((bits >> row) & 1U));
+            }
+        }
+    }
+}
+
+/* 显示字符串，不自动换行；超出右边界时停止。
+   调用后需要OLED_Update()。 */
+void OLED_ShowString(uint8_t x, uint8_t y, const char *text)
+{
+    uint16_t cursor;
+
+    if (text == 0 || x >= OLED_WIDTH || y >= OLED_HEIGHT)
+    {
+        return;
+    }
+
+    cursor = x;
+
+    while (*text != '\0')
+    {
+        if (cursor + 6 > OLED_WIDTH)
+        {
+            break;
+        }
+
+        OLED_ShowChar((uint8_t)cursor, y, *text);
+
+        cursor += 6;
+        text++;
+    }
+}
+
+/* 显示第1～8行，每行8像素高。
+   先清除该行，避免新文字较短时留下旧内容。
+   每行最多显示21个字符。 */
+void OLED_ShowLine(uint8_t line, const char *text)
+{
+    uint8_t y;
+    uint8_t row;
+    uint16_t x;
+
+    if (line < 1 || line > 8 || text == 0)
+    {
+        return;
+    }
+
+    y = (uint8_t)((line - 1) * 8);
+
+    for (x = 0; x < OLED_WIDTH; x++)
+    {
+        for (row = 0; row < 8; row++)
+        {
+            OLED_DrawPixel(
+                (uint8_t)x,
+                (uint8_t)(y + row),
+                0);
+        }
+    }
+
+    OLED_ShowString(0, y, text);
+}
+
