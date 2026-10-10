@@ -111,8 +111,7 @@ void CAN_Motor_Call_Back(Struct_CAN_Rx_Buffer *Rx_Buffer)
  */
  void UART_Serialplot_Call_Back(uint8_t *Buffer, uint16_t Length)
  {
-
-     Robot_Test_Serialplot_Call_Back_Configuration(Buffer , Length, serialplot, motor, motor2);
+     Robot_Test_Serialplot_Call_Back_Configuration(Buffer , Length, serialplot, motor, motor2,&Robot_Target_Speed,&Robot_Target_Distance,&Rotate_Target_Speed,&Rotate_Target_Angle);
 
  } //串口调试 不用时和下面一起注释
 
@@ -152,6 +151,8 @@ int main(void)
   MX_I2C2_Init();
 
   /* USER CODE BEGIN 2 */
+  
+ 
     
   Dictionary_Define(serialplot);
   UART_Init(&huart2, UART_Serialplot_Call_Back, SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH); //串口绘图
@@ -161,9 +162,11 @@ int main(void)
   Robot_Control_Init(motor, motor2); //开启24V接口、CAN外设与电机初始化
 
   Set_M3508_Omega_PID_Parameters(1000.0f, 1330.0f, 0.0f, 20000.0f, motor); //PID参数设置
-  Set_M3508_Angle_PID_Parameters(5.0f, 4.0f, 0.0f, motor); //PID参数设置
+  Set_M3508_Angle_PID_Parameters(0.3f, 0.0f, 0.6f, motor); //PID参数设置
 
   Set_GM6020_Omega_PID_Parameters(80.0f, 100.0f, 0.0f, 2000.0f, motor2);
+
+
 
   /* USER CODE END 2 */
 
@@ -172,10 +175,13 @@ int main(void)
   
     while (1)
     {
-        
-        // Forward_PID_Processing(motor);
+        Move_Forward_Speed_Control(Robot_Target_Speed,MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);  
 
-        // Rotate_PID_Processing(motor2);
+        Robot_Move_Distance_Control(Robot_Target_Distance,MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);
+
+        Forward_PID_Processing(motor);
+
+        Rotate_PID_Processing(motor2);
       
         Robot_Test_Serialplot_Plot(serialplot , motor , motor2 , MOTOR_WHEEL_OMEGA_RATIO , RADIUS);
 

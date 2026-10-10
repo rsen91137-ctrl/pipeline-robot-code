@@ -31,8 +31,8 @@ void Dictionary_Define(Class_Serialplot &serialplot){
     "ta2",
 
     //修改PID模式
-    "3508modechange",
-    "6020modechange",
+     "3508modechange",
+     "6020modechange",
 };
 
     serialplot.Init(&huart2, 20, (char **)Variable_Assignment_List);
@@ -54,7 +54,11 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
     uint16_t Length,
     Class_Serialplot &serialplot,
     Class_Motor_C620 &motor,
-    Class_Motor_GM6020 &motor2){
+    Class_Motor_GM6020 &motor2,
+    float *Robot_Target_Speed,
+    float *Robot_Target_Distance,
+    float *Rotate_Target_Speed,
+    float *Rotate_Target_Angle){
 
     serialplot.UART_RxCpltCallback(Buffer);
     switch (serialplot.Get_Variable_Index())
@@ -98,12 +102,12 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(7):
         {
-            Move_Forward_Speed_Control(serialplot.Get_Variable_Value(), MOTOR_WHEEL_OMEGA_RATIO, RADIUS, motor);
+            *Robot_Target_Speed = serialplot.Get_Variable_Value();
         }
         break;
         case(8):
         {
-            Robot_Move_Distance_Control(serialplot.Get_Variable_Value(), MOTOR_WHEEL_OMEGA_RATIO, RADIUS, motor);
+            *Robot_Target_Distance = serialplot.Get_Variable_Value();
         }
         break;
 
@@ -147,37 +151,43 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(16):
         {
-            Rotate_Distance_Measurement_Speed_Control(serialplot.Get_Variable_Value(), motor2);
+            *Rotate_Target_Speed = serialplot.Get_Variable_Value();
         }
         break;
         case(17):
         {
-            //useless
+            *Rotate_Target_Angle = serialplot.Get_Variable_Value();
         }
         break;
         case(18):{
 
-            //修改PID模式
             if(serialplot.Get_Variable_Value() == 0){
+
                 motor.Set_Control_Method(Control_Method_OMEGA);
+
             }
             else if(serialplot.Get_Variable_Value() == 1){
+
                 motor.Set_Control_Method(Control_Method_ANGLE);
+
             }
 
-        }
+        };
         break;
         case(19):{
 
-            //修改PID模式
             if(serialplot.Get_Variable_Value() == 0){
+
                 motor2.Set_Control_Method(Control_Method_OMEGA);
+
             }
             else if(serialplot.Get_Variable_Value() == 1){
+
                 motor2.Set_Control_Method(Control_Method_ANGLE);
+
             }
 
-        }
+        };
         break;
     }
 
