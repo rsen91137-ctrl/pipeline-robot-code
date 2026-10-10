@@ -1,5 +1,8 @@
 #include "Robot_Control.h"
 
+float Robot_Move_Target_Delta_Distance = 0.0f;
+float Robot_Move_Start_Angle = 0.0f;
+
 /**
  * @brief 初始化所有配置
  * 
@@ -30,6 +33,14 @@ void Set_M3508_Omega_PID_Parameters(float Omega_Kp, float Omega_Ki, float Omega_
     motor.PID_Omega.Set_K_I(Omega_Ki);
     motor.PID_Omega.Set_K_D(Omega_Kd);
     motor.PID_Omega.Set_K_F(Omega_Kf);
+    
+}
+
+void Set_M3508_Angle_PID_Parameters(float Angle_Kp, float Angle_Ki, float Angle_Kd, Class_Motor_C620 &motor){
+
+    motor.PID_Angle.Set_K_P(Angle_Kp);
+    motor.PID_Angle.Set_K_I(Angle_Ki);
+    motor.PID_Angle.Set_K_D(Angle_Kd);
     
 }
 
@@ -72,6 +83,7 @@ void Move_Forward_Speed_Control(float Robot_Target_Speed , float Wheel_Omega_Rat
  * 
  */
 
+
 void Forward_PID_Processing(Class_Motor_C620 &motor){
 
     motor.TIM_PID_PeriodElapsedCallback(); //PID计算
@@ -98,6 +110,25 @@ float Get_Robot_Now_Speed(Class_Motor_C620 &motor, float Wheel_Omega_Ratio , flo
 
     return Robot_Now_Speed;
 
+}
+
+/**
+ * @brief 机器人移动固定距离控制 记得先设置为角度环模式
+ * 
+ * @param Robot_Target_Distance 机器人目标距离 单位米
+ * @param Wheel_Omega_Ratio M3508角速度与后轮角速度之比
+ * @param Wheel_Radius 单位米
+ * @param motor 
+ */
+
+void Robot_Move_Distance_Control(float Robot_Target_Distance, float Wheel_Omega_Ratio, float Wheel_Radius, Class_Motor_C620 &motor){
+    static float pre_Robot_Target_Distance = 0.0f;
+    // if (Math_Abs(Robot_Target_Distance - pre_Robot_Target_Distance) > 0.0001f){
+        Robot_Move_Target_Delta_Distance = Robot_Target_Distance; // 存下 ta
+        Robot_Move_Start_Angle = motor.Get_Now_Angle(); // 存下基准角
+        pre_Robot_Target_Distance = Robot_Target_Distance;
+    //}
+    motor.Set_Target_Angle(Robot_Move_Start_Angle + Robot_Move_Target_Delta_Distance * Wheel_Omega_Ratio / Wheel_Radius);
 }
 
 /**

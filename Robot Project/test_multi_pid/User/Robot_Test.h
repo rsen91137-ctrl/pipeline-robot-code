@@ -21,11 +21,7 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
     uint16_t Length,
     Class_Serialplot &serialplot,
     Class_Motor_C620 &motor,
-    Class_Motor_GM6020 &motor2,
-    float *Robot_Target_Speed,
-    float *Robot_Target_Distance,
-    float *Rotate_Target_Speed,
-    float *Rotate_Target_Angle);
+    Class_Motor_GM6020 &motor2);
 
 void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , float Wheel_Omega_Ratio , float Wheel_Radius);
 

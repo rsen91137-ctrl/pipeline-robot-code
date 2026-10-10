@@ -29,9 +29,13 @@ void Dictionary_Define(Class_Serialplot &serialplot){
     "da2",
     "to2",
     "ta2",
+
+    //修改PID模式
+    "3508modechange",
+    "6020modechange",
 };
 
-    serialplot.Init(&huart2, 18, (char **)Variable_Assignment_List);
+    serialplot.Init(&huart2, 20, (char **)Variable_Assignment_List);
     
 
 }
@@ -50,11 +54,7 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
     uint16_t Length,
     Class_Serialplot &serialplot,
     Class_Motor_C620 &motor,
-    Class_Motor_GM6020 &motor2,
-    float *Robot_Target_Speed,
-    float *Robot_Target_Distance,
-    float *Rotate_Target_Speed,
-    float *Rotate_Target_Angle){
+    Class_Motor_GM6020 &motor2){
 
     serialplot.UART_RxCpltCallback(Buffer);
     switch (serialplot.Get_Variable_Index())
@@ -98,12 +98,12 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(7):
         {
-            *Robot_Target_Speed = serialplot.Get_Variable_Value();
+            Move_Forward_Speed_Control(serialplot.Get_Variable_Value(), MOTOR_WHEEL_OMEGA_RATIO, RADIUS, motor);
         }
         break;
         case(8):
         {
-            *Robot_Target_Distance = serialplot.Get_Variable_Value();
+            Robot_Move_Distance_Control(serialplot.Get_Variable_Value(), MOTOR_WHEEL_OMEGA_RATIO, RADIUS, motor);
         }
         break;
 
@@ -147,12 +147,36 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(16):
         {
-            *Rotate_Target_Speed = serialplot.Get_Variable_Value();
+            Rotate_Distance_Measurement_Speed_Control(serialplot.Get_Variable_Value(), motor2);
         }
         break;
         case(17):
         {
-            *Rotate_Target_Angle = serialplot.Get_Variable_Value();
+            //useless
+        }
+        break;
+        case(18):{
+
+            //修改PID模式
+            if(serialplot.Get_Variable_Value() == 0){
+                motor.Set_Control_Method(Control_Method_OMEGA);
+            }
+            else if(serialplot.Get_Variable_Value() == 1){
+                motor.Set_Control_Method(Control_Method_ANGLE);
+            }
+
+        }
+        break;
+        case(19):{
+
+            //修改PID模式
+            if(serialplot.Get_Variable_Value() == 0){
+                motor2.Set_Control_Method(Control_Method_OMEGA);
+            }
+            else if(serialplot.Get_Variable_Value() == 1){
+                motor2.Set_Control_Method(Control_Method_ANGLE);
+            }
+
         }
         break;
     }
@@ -165,8 +189,7 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
  */
 
 void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , float Wheel_Omega_Ratio , float Wheel_Radius){
-
-    float Robot_Target_Speed, Robot_Now_Speed,Rotate_Target_Speed, Rotate_Now_Speed;
+    float Robot_Target_Speed, Robot_Now_Speed,Rotate_Target_Speed, Rotate_Now_Speed, Robot_Target_Distance, Robot_Now_Distance;
 
     Robot_Target_Speed = motor.Get_Target_Omega() * Wheel_Radius / Wheel_Omega_Ratio;
     Rotate_Target_Speed = motor2.Get_Target_Omega() * RADS_TO_RPM;
@@ -174,7 +197,10 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
     Robot_Now_Speed = Get_Robot_Now_Speed(motor, Wheel_Omega_Ratio , Wheel_Radius);
     Rotate_Now_Speed = Get_Rotate_Now_Speed(motor2);
 
-    serialplot.Set_Data(4,&Robot_Target_Speed, &Robot_Now_Speed, &Rotate_Target_Speed, &Rotate_Now_Speed);
+    Robot_Target_Distance = Robot_Move_Target_Delta_Distance;   // 显示 ta（本次要走的距离）
+    Robot_Now_Distance = (motor.Get_Now_Angle() - Robot_Move_Start_Angle) * Wheel_Radius / Wheel_Omega_Ratio;    // 从指令起点累计的当前距离
+
+    serialplot.Set_Data(6,&Robot_Target_Speed, &Robot_Now_Speed, &Rotate_Target_Speed, &Rotate_Now_Speed, &Robot_Target_Distance, &Robot_Now_Distance);
     serialplot.TIM_Write_PeriodElapsedCallback();
 
     TIM_UART_PeriodElapsedCallback();

@@ -32,9 +32,6 @@
 #include "Robot_Control.h"
 #include "Robot_test.h"
 
-#define RADIUS 0.018 //暂时填0.0018
-#define MOTOR_WHEEL_OMEGA_RATIO 1.0
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -115,7 +112,7 @@ void CAN_Motor_Call_Back(Struct_CAN_Rx_Buffer *Rx_Buffer)
  void UART_Serialplot_Call_Back(uint8_t *Buffer, uint16_t Length)
  {
 
-     Robot_Test_Serialplot_Call_Back_Configuration(Buffer , Length, serialplot, motor, motor2, &Robot_Target_Speed, &Robot_Target_Distance, &Rotate_Target_Speed, &Rotate_Target_Angle);
+     Robot_Test_Serialplot_Call_Back_Configuration(Buffer , Length, serialplot, motor, motor2);
 
  } //串口调试 不用时和下面一起注释
 
@@ -162,7 +159,10 @@ int main(void)
   BSP_Init(BSP_DC24_LU_ON | BSP_DC24_LD_ON | BSP_DC24_RU_ON | BSP_DC24_RD_ON);
   CAN_Init(&hcan1, CAN_Motor_Call_Back);
   Robot_Control_Init(motor, motor2); //开启24V接口、CAN外设与电机初始化
+
   Set_M3508_Omega_PID_Parameters(1000.0f, 1330.0f, 0.0f, 20000.0f, motor); //PID参数设置
+  Set_M3508_Angle_PID_Parameters(5.0f, 4.0f, 0.0f, motor); //PID参数设置
+
   Set_GM6020_Omega_PID_Parameters(80.0f, 100.0f, 0.0f, 2000.0f, motor2);
 
   /* USER CODE END 2 */
@@ -173,14 +173,9 @@ int main(void)
     while (1)
     {
         
-        //串口绘图
-        Move_Forward_Speed_Control(Robot_Target_Speed , MOTOR_WHEEL_OMEGA_RATIO , RADIUS , motor);
+        // Forward_PID_Processing(motor);
 
-        Forward_PID_Processing(motor);
-
-        Rotate_Distance_Measurement_Speed_Control(Rotate_Target_Speed , motor2);
-
-        Rotate_PID_Processing(motor2);
+        // Rotate_PID_Processing(motor2);
       
         Robot_Test_Serialplot_Plot(serialplot , motor , motor2 , MOTOR_WHEEL_OMEGA_RATIO , RADIUS);
 
