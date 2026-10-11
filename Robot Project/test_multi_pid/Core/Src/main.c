@@ -73,9 +73,9 @@ Class_Motor_C610 motor4;
 
 float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed, //机器人距离与速度控制
 
-      Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed, //旋转测距速度控制
+      Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed; //旋转测距速度控制
 
-      Front_Structure_Now_Angle, Rear_Structure_Now_Angle , Front_Structure_Target_Angle, Rear_Structure_Target_Angle; //丝杆结构角度控制
+      //丝杆结构角度控制放在c610类中
       
       
 

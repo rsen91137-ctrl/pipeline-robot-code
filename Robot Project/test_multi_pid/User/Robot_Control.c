@@ -267,24 +267,6 @@ float Get_Rotate_Now_Speed(Class_Motor_GM6020 &motor2){
 
 }
 
-float Get_Robot_Target_Speed(){
-
-
-
-}
-
-float Get_Robot_Target_Distance(){
-
-
-
-}
-
-float Get_Rotate_Target_Omega(){
-
-
-
-}
-
 
 
 /**
@@ -350,6 +332,8 @@ if (GPIO_Pin == GPIO_PIN_0)
     }
     else if (level == GPIO_PIN_RESET && zero3_state == ZERO_BACKING)
     {
+
+        
         // motor3 停机，并记录当前位置为零点
 
         zero3_state = ZERO_DONE;
@@ -370,11 +354,19 @@ else if (GPIO_Pin == GPIO_PIN_1){
     }
     else if (level == GPIO_PIN_RESET && zero4_state == ZERO_BACKING)
     {
+
+        
         // motor3 停机，并记录当前位置为零点
 
         zero4_state = ZERO_DONE;
     }
 }
+
+}
+
+void Front_Set_Zero(Class_Motor_C610 &motor3){
+
+
 
 }
 
