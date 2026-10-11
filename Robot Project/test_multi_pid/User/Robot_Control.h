@@ -29,28 +29,69 @@ extern float Robot_Move_Start_Angle;             // 记录每次移动距离ta�
 
       ;
 
-void Robot_Control_Init(Class_Motor_C620 &motor, Class_Motor_GM6020 &motor2);
+//调零开关
+enum Zero_State
+{
+    ZERO_WAIT_PRESS,  // 等待按下
+    ZERO_BACKING,     // 已按下，正在反转退出
+    ZERO_DONE        // 已松开，调零完成
+};
 
+extern Zero_State zero3_state;
+extern Zero_State zero4_state;
+
+
+/**
+ * @brief 要找函数别傻乎乎的跑去control.c里面翻半天 control.h里面已经整理的非常有条理了 对准你要看或改的函数按下F12就行
+ * 
+ */
+
+//初始化
+void Robot_Control_Init(Class_Motor_C620 &motor, Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4);
+
+
+//PID参数调节
 void Set_M3508_Omega_PID_Parameters(float Omega_Kp, float Omega_Ki, float Omega_Kd, float Omega_Kf, Class_Motor_C620 &motor);
 
 void Set_M3508_Angle_PID_Parameters(float Angle_Kp, float Angle_Ki, float Angle_Kd, Class_Motor_C620 &motor);
 
 void Set_GM6020_Omega_PID_Parameters(float Omega_Kp, float Omega_Ki, float Omega_Kd, float Omega_Kf, Class_Motor_GM6020 &motor2);
 
+void Set_M2006_Omega_PID_Parameters(float Omega_Kp, float Omega_Ki, float Omega_Kd, float Omega_Kf, Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4);
+
+void Set_M2006_Angle_PID_Parameters(float Omega_Kp, float Omega_Ki, float Omega_Kd, float Omega_Kf, Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4);
+
+
+//机器人各项参数控制
 void Move_Forward_Speed_Control(float Robot_Target_Speed , float Wheel_Omega_Ratio , float Wheel_Radius ,Class_Motor_C620 &motor);
-
-void Forward_PID_Processing(Class_Motor_C620 &motor);
-
-float Get_Robot_Now_Speed(Class_Motor_C620 &motor, float Wheel_Omega_Ratio , float Wheel_Radius);
 
 void Robot_Move_Distance_Control(float Robot_Target_Distance, float Wheel_Omega_Ratio, float Wheel_Radius, Class_Motor_C620 &motor);
 
-
-
 void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class_Motor_GM6020 &motor2);
+
+
+//PID运算
+void Forward_PID_Processing(Class_Motor_C620 &motor);
 
 void Rotate_PID_Processing(Class_Motor_GM6020 &motor2);
 
+void Angle_Adjusting_PID_Processing(Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4);
+
+
+//反馈
+float Get_Robot_Now_Speed(Class_Motor_C620 &motor, float Wheel_Omega_Ratio , float Wheel_Radius);
+
 float Get_Rotate_Now_Speed(Class_Motor_GM6020 &motor2);
+
+
+//回调函数配置
+void CAN_Call_Back_Configuration(Struct_CAN_Rx_Buffer *Rx_Buffer , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3, Class_Motor_C610 &motor4);
+
+
+//调零开关回调函数
+extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
+
+
+
 
 #endif

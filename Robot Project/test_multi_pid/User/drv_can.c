@@ -160,7 +160,7 @@ void TIM_CAN_PeriodElapsedCallback()
     mod10++;
 
     // CAN1电机
-    CAN_Send_Data(&hcan1, 0x200, CAN1_0x200_Tx_Data, 8); //M3508电机
+    CAN_Send_Data(&hcan1, 0x200, CAN1_0x200_Tx_Data, 8); //M3508电机以及M2006电机
     CAN_Send_Data(&hcan1, 0x1fe, CAN1_0x1ff_Tx_Data, 8); //GM6020 由于改为电流环 所以是0x1fe
     // CAN_Send_Data(&hcan1, 0x2ff, CAN1_0x2ff_Tx_Data, 8);
 

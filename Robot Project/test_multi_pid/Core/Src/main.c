@@ -58,11 +58,26 @@
 /* USER CODE BEGIN PV */
 
 Class_Serialplot serialplot;
+
 Class_Motor_C620 motor; //这里定义是c620电调
 Class_Motor_GM6020 motor2; //这里定义是GM6020电机
 
-float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed,
-      Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed;
+Class_Motor_C610 motor3; //两个M2006电机
+Class_Motor_C610 motor4;
+
+/*
+
+      Motor3为前端丝杆结构控制电机 Motor4为后端丝杆结构控制电机
+
+      */
+
+float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed, //机器人距离与速度控制
+
+      Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed, //旋转测距速度控制
+
+      Front_Structure_Now_Angle, Rear_Structure_Now_Angle , Front_Structure_Target_Angle, Rear_Structure_Target_Angle; //丝杆结构角度控制
+      
+      
 
 uint32_t Counter = 0;
 
@@ -88,19 +103,7 @@ void SystemClock_Config(void);
  */
 void CAN_Motor_Call_Back(Struct_CAN_Rx_Buffer *Rx_Buffer)
 {
-    switch (Rx_Buffer->Header.StdId)
-    {
-        case (0x201):
-        {
-            motor.CAN_RxCpltCallback(Rx_Buffer->Data);
-        }
-        break;
-        case(0x206):
-        {
-            motor2.CAN_RxCpltCallback(Rx_Buffer->Data);
-        }
-        break;
-    }
+    CAN_Call_Back_Configuration(Rx_Buffer , motor , motor2 , motor3 , motor4);
 }
 
 /**
@@ -151,21 +154,20 @@ int main(void)
   MX_I2C2_Init();
 
   /* USER CODE BEGIN 2 */
-  
- 
     
   Dictionary_Define(serialplot);
   UART_Init(&huart2, UART_Serialplot_Call_Back, SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH); //串口绘图
 
   BSP_Init(BSP_DC24_LU_ON | BSP_DC24_LD_ON | BSP_DC24_RU_ON | BSP_DC24_RD_ON);
-  CAN_Init(&hcan1, CAN_Motor_Call_Back);
-  Robot_Control_Init(motor, motor2); //开启24V接口、CAN外设与电机初始化
+  CAN_Init(&hcan1, CAN_Motor_Call_Back);//24V接口和CAN外设初始化
 
-  Set_M3508_Omega_PID_Parameters(1000.0f, 1330.0f, 0.0f, 20000.0f, motor); //PID参数设置
-  Set_M3508_Angle_PID_Parameters(0.3f, 0.0f, 0.6f, motor); //PID参数设置
+  Robot_Control_Init(motor, motor2 , motor3 , motor4); //开启24V接口、CAN外设与电机初始化
 
+  Set_M3508_Omega_PID_Parameters(1000.0f, 1330.0f, 0.0f, 20000.0f, motor); 
+  Set_M3508_Angle_PID_Parameters(0.3f, 0.0f, 0.6f, motor); 
   Set_GM6020_Omega_PID_Parameters(80.0f, 100.0f, 0.0f, 2000.0f, motor2);
-
+  Set_M2006_Omega_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);
+  Set_M2006_Angle_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);//PID参数设置
 
 
   /* USER CODE END 2 */
@@ -175,13 +177,15 @@ int main(void)
   
     while (1)
     {
-        Move_Forward_Speed_Control(Robot_Target_Speed,MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);  
+        // Move_Forward_Speed_Control(Robot_Target_Speed,MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);  
 
-        Robot_Move_Distance_Control(Robot_Target_Distance,MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);
-
+        // Robot_Move_Distance_Control(Robot_Target_Distance,MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);
+        
         Forward_PID_Processing(motor);
 
         Rotate_PID_Processing(motor2);
+
+        Angle_Adjusting_PID_Processing(motor3 , motor4);
       
         Robot_Test_Serialplot_Plot(serialplot , motor , motor2 , MOTOR_WHEEL_OMEGA_RATIO , RADIUS);
 

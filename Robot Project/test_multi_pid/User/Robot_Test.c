@@ -102,12 +102,14 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(7):
         {
-            *Robot_Target_Speed = serialplot.Get_Variable_Value();
+            // *Robot_Target_Speed = serialplot.Get_Variable_Value();
+            Move_Forward_Speed_Control(serialplot.Get_Variable_Value(),MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);
         }
         break;
         case(8):
         {
-            *Robot_Target_Distance = serialplot.Get_Variable_Value();
+            //*Robot_Target_Distance = serialplot.Get_Variable_Value();
+            Robot_Move_Distance_Control(serialplot.Get_Variable_Value(),MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);
         }
         break;
 
