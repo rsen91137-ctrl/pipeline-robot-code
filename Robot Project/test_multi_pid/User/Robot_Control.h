@@ -133,10 +133,13 @@ void Motor_Back(Class_Motor_C610 &motor);//电机回转函数
 
 void Operate_Motor_Set_Zero(Class_Motor_C610 &motor);//调零启动函数
 
+//自拟合函数 即和输入管径后与管壁贴合压紧 余量不能定量计算 可以通过实验拟定
+
 
 //转换与计算函数
-float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor);
+float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor); //目标张角转换为螺母圈数
 
+float Angle_Caculate_From_Radius(float Radius); //管道半径转换为张开角度
 
 
 #endif
