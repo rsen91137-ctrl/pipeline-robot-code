@@ -166,18 +166,18 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
  
 void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
 
-    float Rotate_Num = 0.0f , Rotate_Angle = 0.0f , RAD_Target_Angle = 0.0f;
+    float Rotate_Num = 0.0f , Rotate_Angle = 0.0f ;
 
     if(&motor == &motor3){ //前端电机拟合
 
-        Rotate_Num = Angle_Round_Transfer(0.5 * Target_Angle , motor3);
-        Rotate_Angle = 2 * PI * Rotate_Num * MOTOR3_DERECTION_SYMBOL;
+        Rotate_Num = Angle_Round_Transfer(0.5f * Target_Angle , motor3);
+        Rotate_Angle = 2.0f * PI * Rotate_Num * MOTOR3_DERECTION_SYMBOL;
 
     }
     else if(&motor == &motor4){
 
-        Rotate_Num = Angle_Round_Transfer(0.5 * Target_Angle , motor4);
-        Rotate_Angle = 2 * PI * Rotate_Num * MOTOR4_DERECTION_SYMBOL; 
+        Rotate_Num = Angle_Round_Transfer(0.5f * Target_Angle , motor4);
+        Rotate_Angle = 2.0f * PI * Rotate_Num * MOTOR4_DERECTION_SYMBOL; 
 
     }
 
@@ -460,7 +460,7 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
     motor3.Set_Control_Method(Control_Method_OMEGA);
     motor3.Set_Target_Omega(MOTOR3_DERECTION_SYMBOL * SETZEROSPEED);
 
-    zero3_state == ZERO_WAIT_PRESS;
+    zero3_state = ZERO_WAIT_PRESS;
 
          }
     }
@@ -471,7 +471,7 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
     motor4.Set_Control_Method(Control_Method_OMEGA);
     motor4.Set_Target_Omega(MOTOR4_DERECTION_SYMBOL * SETZEROSPEED);
 
-    zero4_state == ZERO_WAIT_PRESS;
+    zero4_state = ZERO_WAIT_PRESS;
 
          }
     }
@@ -531,7 +531,7 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
     if(&motor == &motor3){ //前端电机
 
-    Absolute_Coordinate = sqrt((FRONT_NODE_LENGTH)*(FRONT_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))*(SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))) - SPRING_ORIGINAL_LENGTH * cos(0.5 * Angle) - FRONT_ZERO_POINT;
+    Absolute_Coordinate = sqrtf((FRONT_NODE_LENGTH)*(FRONT_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sinf(0.5f * Angle))*(SPRING_ORIGINAL_LENGTH * sinf(0.5f * Angle))) - SPRING_ORIGINAL_LENGTH * cosf(0.5f * Angle) - FRONT_ZERO_POINT;
 
     Distance = Absolute_Coordinate - motor.Front_Structure_Now_Coordinate; //表示螺母还要运动的距离
 
@@ -546,7 +546,7 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
     }
     else if(&motor == &motor4){ //后端电机
 
-    Absolute_Coordinate = sqrt((REAR_NODE_LENGTH)*(REAR_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))*(SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))) - SPRING_ORIGINAL_LENGTH * cos(0.5 * Angle) - REAR_ZERO_POINT;
+    Absolute_Coordinate = sqrtf((REAR_NODE_LENGTH)*(REAR_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sinf(0.5f * Angle))*(SPRING_ORIGINAL_LENGTH * sinf(0.5f * Angle))) - SPRING_ORIGINAL_LENGTH * cosf(0.5f * Angle) - REAR_ZERO_POINT;
 
     Distance = Absolute_Coordinate - motor.Rear_Structure_Now_Coordinate; //表示螺母还要运动的距离
 
@@ -558,6 +558,11 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
     return Round;
 
+
+    }
+    else{
+
+        return ;
 
     }
     
@@ -575,7 +580,7 @@ float Angle_Caculate_From_Radius(float Radius){
 
     float Span_Angle = 0.0f;
 
-    Span_Angle = asin( TOTAL_LENGTH / (Radius - RADIUS) ) * 2;
+    Span_Angle = asinf( TOTAL_LENGTH / (Radius - RADIUS) ) * 2.0f;
 
     return Span_Angle;
 
