@@ -14,10 +14,39 @@
 #include "oled.h"
 #include "string.h"
 
+#define ANGLE_TO_RADS ( / 180.0f)
 #define RADS_TO_RPM (60.0f / (2.0f * PI))
 
-#define RADIUS 0.018 //暂时填0.0018
+#define RADIUS 0.018 //驱动轮半径 暂时填0.0018
 #define MOTOR_WHEEL_OMEGA_RATIO 1.0
+
+#define MOTOR3_POSITIVE_DERECTION_SYMBOL (+1.0f) 
+#define MOTOR3_NEGATIVE_DERECTION_SYMBOL (-1.0f)
+/*设前端电机motor3将螺母向正/负方向移动(从零点向下 拉开力臂 即正向移动,向零点靠近 收缩力臂 即反向移动)需要设置的速度与角度正负号
+ 例如实际安装后 目标设为+45 实际可能是反方向运动
+  所以先设定方向 方便修改*/
+
+#define MOTOR4_POSITIVE_DERECTION_SYMBOL (+1.0f) 
+#define MOTOR4_NEGATIVE_DERECTION_SYMBOL (-1.0f)
+//同上
+
+#define FRONT_ANGLE_MINIMUM 20 //前端力臂最小夹角 角度制
+#define FRONT_ANGLE_MAXIMUM 120 //前端力臂最大夹角 角度制
+#define FRONT_LENGTH 0.1 //前端力臂长度 转轴到轮心 单位米
+#define FRONT_NODE_LENGTH 0.05 //前端弹簧连接支点到转轴距离 单位米
+#define FRONT_ZERO_POINT 0.03 //前端丝杆零点到转轴距离 单位米
+
+#define REAR_ANGLE_MINIMUM 20 //后端类似
+#define REAR_ANGLE_MAXIMUM 120
+#define REAR_LENGTH 0.1
+#define REAR_NODE_LENGTH 0.05
+#define REAR_ZERO_POINT 0.03
+
+#define SETZEROSPEED 2 //调零螺母正向移动,电机角速度 单位rad/s
+#define BACKSPEED 2 //螺母触点后回退,电机角速度 单位rad/s
+
+#define SPRING_ORIGINAL_LENGTH 0.1 //弹簧原长 单位米
+
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离
 extern float Robot_Move_Start_Angle;             // 记录每次移动距离ta指令发出后的起始角度，便于计算当前距离
@@ -39,6 +68,9 @@ enum Zero_State
 
 extern Zero_State zero3_state;
 extern Zero_State zero4_state;
+
+extern Class_Motor_C610 motor3;
+extern Class_Motor_C610 motor4;
 
 
 /**
@@ -88,10 +120,13 @@ float Get_Rotate_Now_Speed(Class_Motor_GM6020 &motor2);
 void CAN_Call_Back_Configuration(Struct_CAN_Rx_Buffer *Rx_Buffer , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3, Class_Motor_C610 &motor4);
 
 
-//调零开关回调函数
-extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
+//调零函数
+extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin); //按钮触发回调函数
 
+void Motor_Set_Zero(Class_Motor_C610 &motor);//调零执行函数
 
+void Motor_Back(Class_Motor_C610 &motor);//电机回转函数
 
+void Operate_Motor_Set_Zero(Class_Motor_C610 &motor);//调零启动函数
 
 #endif

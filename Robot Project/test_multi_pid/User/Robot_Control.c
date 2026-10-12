@@ -163,6 +163,18 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
 }
 
 /**
+ * @brief 前端丝杆结构角度控制(空载 仅用于初步拟合)
+ * 
+ */
+ 
+void Front_Structure_Angle_Set(){
+
+
+
+}
+
+
+/**
  * @brief 驱动电机M3508的PID计算以及传回电机
  * 
  */
@@ -319,61 +331,142 @@ void CAN_Call_Back_Configuration(Struct_CAN_Rx_Buffer *Rx_Buffer , Class_Motor_C
 extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 
-//PC0 为前端丝杆结构的调零开关
-if (GPIO_Pin == GPIO_PIN_0)
-{
-    GPIO_PinState level = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0);
+//PC1 为前端丝杆结构的调零开关
+if (GPIO_Pin == GPIO_PIN_1){
+    
+    GPIO_PinState level = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
 
     if (level == GPIO_PIN_SET && zero3_state == ZERO_WAIT_PRESS)
     {
         zero3_state = ZERO_BACKING;
 
-        // motor3 切换为速度环，设置退出开关方向的速度
+        Motor_Back(motor3);
+
+        // motor3 设置退出开关方向的速度
     }
     else if (level == GPIO_PIN_RESET && zero3_state == ZERO_BACKING)
     {
 
-        
-        // motor3 停机，并记录当前位置为零点
+        Motor_Set_Zero(motor3);
+        // motor3 切换回角度环，停机，并记录当前位置为零点
 
         zero3_state = ZERO_DONE;
     }
 }
 
-
-//PC1 为前端丝杆结构的调零开关
-else if (GPIO_Pin == GPIO_PIN_1){
-    
-    GPIO_PinState level = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
+//PC0 为前端丝杆结构的调零开关
+else if (GPIO_Pin == GPIO_PIN_0)
+{
+    GPIO_PinState level = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_0);
 
     if (level == GPIO_PIN_SET && zero4_state == ZERO_WAIT_PRESS)
     {
         zero4_state = ZERO_BACKING;
 
-        // motor3 切换为速度环，设置退出开关方向的速度
+        Motor_Back(motor4);
+
+        // motor4 设置退出开关方向的速度
     }
-    else if (level == GPIO_PIN_RESET && zero4_state == ZERO_BACKING)
+    else if (level == GPIO_PIN_RESET && zero3_state == ZERO_BACKING)
     {
 
-        
-        // motor3 停机，并记录当前位置为零点
+        Motor_Set_Zero(motor4);
+        // motor4 切换回角度环，停机 ，并记录当前位置为零点
 
         zero4_state = ZERO_DONE;
     }
 }
 
-}
-
-void Front_Set_Zero(Class_Motor_C610 &motor3){
-
-
 
 }
 
 /**
- * @brief 
- * 
+ * @brief 电机停机与调零 调零程序
  * 
  */
+
+void Motor_Set_Zero(Class_Motor_C610 &motor){
+
+    if(&motor == &motor3){
+
+    motor3.Set_Control_Method(Control_Method_ANGLE); //切换回角度环
+
+    motor3.Set_Target_Angle(motor3.Get_Now_Angle());
+    motor3.Set_Target_Omega(0.0f); //停机
+
+    motor3.Front_Structure_Now_Angle = FRONT_ANGLE_MINIMUM; //设置零点
+
+    }
+    else if(&motor == &motor4){
+
+    motor4.Set_Control_Method(Control_Method_ANGLE); //切换回角度环
+
+    motor4.Set_Target_Angle(motor4.Get_Now_Angle());
+    motor4.Set_Target_Omega(0.0f); //停机
+
+    motor4.Front_Structure_Now_Angle = REAR_ANGLE_MINIMUM; //设置零点
+
+
+
+    }
+
+}
+
+
+/**
+ * @brief 电机触点后退回 即前端电机运动负方向
+ * 
+ */
+
+void Motor_Back(Class_Motor_C610 &motor){
+
+    if(&motor == &motor3){
+
+    motor3.Set_Target_Omega(MOTOR3_NEGATIVE_DERECTION_SYMBOL * BACKSPEED); //负方向速度
+
+    }
+    else if(&motor == &motor4){
+
+    motor4.Set_Target_Omega(MOTOR4_NEGATIVE_DERECTION_SYMBOL * BACKSPEED);
+
+    }
+
+}
+
+
+
+/**
+ * @brief 电机调零程序启动 执行程序
+ * 
+ */
+
+void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
+
+    if(&motor == &motor3){
+
+    if(zero3_state == ZERO_DONE){ //判断是否为非调零中状态
+
+    motor3.Set_Control_Method(Control_Method_OMEGA);
+    motor3.Set_Target_Omega(SETZEROSPEED);
+
+    zero3_state == ZERO_WAIT_PRESS;
+
+         }
+    }
+    else if(&motor == &motor4){
+
+    if(zero4_state == ZERO_DONE){ //判断是否为非调零中状态
+
+    motor4.Set_Control_Method(Control_Method_OMEGA);
+    motor4.Set_Target_Omega(SETZEROSPEED);
+
+    zero4_state == ZERO_WAIT_PRESS;
+
+         }
+    }
+
+}
+
+
 
 
