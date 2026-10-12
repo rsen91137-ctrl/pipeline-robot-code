@@ -13,6 +13,7 @@
 #include "stdio.h"
 #include "oled.h"
 #include "string.h"
+#include "math.h"
 
 #define ANGLE_TO_RADS ( / 180.0f)
 #define RADS_TO_RPM (60.0f / (2.0f * PI))
@@ -20,14 +21,12 @@
 #define RADIUS 0.018f //驱动轮半径 暂时填0.0018
 #define MOTOR_WHEEL_OMEGA_RATIO 1.0f
 
-#define MOTOR3_POSITIVE_DERECTION_SYMBOL (+1.0f) 
-#define MOTOR3_NEGATIVE_DERECTION_SYMBOL (-1.0f)
-/*设前端电机motor3将螺母向正/负方向移动(从零点向下 拉开力臂 即正向移动,向零点靠近 收缩力臂 即反向移动)需要设置的速度与角度正负号
+#define MOTOR3_DERECTION_SYMBOL (+1.0f) 
+/*设前端电机motor3将螺母向正方向移动(从零点向下 拉开力臂 即正向移动,向零点靠近 收缩力臂 即反向移动)需要设置的速度与角度正负号
  例如实际安装后 目标设为+45 实际可能是反方向运动
-  所以先设定方向 方便修改*/
+  所以先设定方向 假设它们相同 方便修改*/
 
-#define MOTOR4_POSITIVE_DERECTION_SYMBOL (+1.0f) 
-#define MOTOR4_NEGATIVE_DERECTION_SYMBOL (-1.0f)
+#define MOTOR4_DERECTION_SYMBOL (+1.0f) 
 //同上
 
 #define FRONT_ANGLE_MINIMUM 20.0f //前端力臂最小夹角 角度制
@@ -110,8 +109,7 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
 
 void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C610 &motor);  //M2006旋转指定圈数
 
-void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);  //丝杆结构角度控制(空载 仅用于初步拟合)
-
+void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);
 
 
 //PID运算
@@ -142,7 +140,16 @@ void Motor_Back(Class_Motor_C610 &motor);//电机回转函数
 void Operate_Motor_Set_Zero(Class_Motor_C610 &motor);//调零启动函数
 
 
-//转换计算函数
-float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor);
+//自拟合函数 即和输入管径后与管壁贴合压紧 余量不能定量计算 可以通过实验拟定
+void Auto_Fit_Operation(Class_Motor_C610 &motor , float Radius , float Extra);
+
+void Structure_Init(float Radius , float Extra);
+
+
+//转换与计算函数
+float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor); //目标张角转换为螺母圈数
+
+float Angle_Caculate_From_Radius(float Radius); //管道半径转换为张开角度
+
 
 #endif
