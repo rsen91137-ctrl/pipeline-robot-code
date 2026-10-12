@@ -501,6 +501,24 @@ void Auto_Fit_Operation(Class_Motor_C610 &motor , float Radius , float Extra){
 
 }
 
+/**
+ * @brief 初始化机械结构 调零后卡紧管壁
+ * 
+ * @param Radius 管道半径
+ */
+ 
+void Structure_Init(float Radius , float Extra){
+
+    Operate_Motor_Set_Zero(motor3);
+    Operate_Motor_Set_Zero(motor4);
+
+    HAL_Delay(15000);
+
+    Auto_Fit_Operation(motor3 , Radius , Extra);
+    Auto_Fit_Operation(motor4 , Radius , Extra);
+
+}
+
 
 /**
  * @brief 转换角度与旋转圈数

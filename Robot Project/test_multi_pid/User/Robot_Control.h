@@ -133,7 +133,11 @@ void Motor_Back(Class_Motor_C610 &motor);//电机回转函数
 
 void Operate_Motor_Set_Zero(Class_Motor_C610 &motor);//调零启动函数
 
+
 //自拟合函数 即和输入管径后与管壁贴合压紧 余量不能定量计算 可以通过实验拟定
+void Auto_Fit_Operation(Class_Motor_C610 &motor , float Radius , float Extra);
+
+void Structure_Init(float Radius , float Extra);
 
 
 //转换与计算函数
