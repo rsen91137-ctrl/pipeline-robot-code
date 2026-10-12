@@ -229,6 +229,7 @@ public:
     void TIM_PID_PeriodElapsedCallback();
 
     float Front_Structure_Now_Angle, Rear_Structure_Now_Angle , Front_Structure_Target_Angle, Rear_Structure_Target_Angle; //丝杆角度控制
+    float Front_Structure_Now_Coordinate, Rear_Structure_Now_Coordinate;
 
 protected:
     //初始化相关常量

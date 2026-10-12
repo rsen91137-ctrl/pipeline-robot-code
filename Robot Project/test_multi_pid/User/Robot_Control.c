@@ -169,11 +169,18 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
  
 void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
 
-    float Rotate_Num = 0.0f;
+    float Rotate_Num = 0.0f , Rotate_Angle = 0.0f;
 
     if(&motor == &motor3){ //前端电机拟合
 
-        Rotate_Num = 0;
+        Rotate_Num = Angle_Round_Transfer(0.5 * Target_Angle , motor3);
+        Rotate_Angle = 2 * PI * Rotate_Num * MOTOR3_DERECTION_SYMBOL;
+
+    }
+    else if(&motor == &motor4){
+
+        Rotate_Num = Angle_Round_Transfer(0.5 * Target_Angle , motor4);
+        Rotate_Angle = 2 * PI * Rotate_Num * MOTOR3_DERECTION_SYMBOL; 
 
     }
 
@@ -401,6 +408,7 @@ void Motor_Set_Zero(Class_Motor_C610 &motor){
     motor3.Set_Target_Omega(0.0f); //停机
 
     motor3.Front_Structure_Now_Angle = FRONT_ANGLE_MINIMUM; //设置零点
+    motor3.Front_Structure_Now_Coordinate = 0;
 
     }
     else if(&motor == &motor4){
@@ -411,7 +419,7 @@ void Motor_Set_Zero(Class_Motor_C610 &motor){
     motor4.Set_Target_Omega(0.0f); //停机
 
     motor4.Front_Structure_Now_Angle = REAR_ANGLE_MINIMUM; //设置零点
-
+    motor4.Front_Structure_Now_Coordinate = 0;
 
 
     }
@@ -428,12 +436,12 @@ void Motor_Back(Class_Motor_C610 &motor){
 
     if(&motor == &motor3){
 
-    motor3.Set_Target_Omega(MOTOR3_NEGATIVE_DERECTION_SYMBOL * BACKSPEED); //负方向速度
+    motor3.Set_Target_Omega(MOTOR3_DERECTION_SYMBOL * BACKSPEED); //负方向速度
 
     }
     else if(&motor == &motor4){
 
-    motor4.Set_Target_Omega(MOTOR4_NEGATIVE_DERECTION_SYMBOL * BACKSPEED);
+    motor4.Set_Target_Omega(MOTOR4_DERECTION_SYMBOL * BACKSPEED);
 
     }
 
@@ -453,7 +461,7 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
     if(zero3_state == ZERO_DONE){ //判断是否为非调零中状态 调零时向下运动 为正方向
 
     motor3.Set_Control_Method(Control_Method_OMEGA);
-    motor3.Set_Target_Omega(MOTOR3_POSITIVE_DERECTION_SYMBOL * SETZEROSPEED);
+    motor3.Set_Target_Omega(MOTOR3_DERECTION_SYMBOL * SETZEROSPEED);
 
     zero3_state == ZERO_WAIT_PRESS;
 
@@ -464,7 +472,7 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
     if(zero4_state == ZERO_DONE){ //判断是否为非调零中状态
 
     motor4.Set_Control_Method(Control_Method_OMEGA);
-    motor4.Set_Target_Omega(MOTOR4_POSITIVE_DERECTION_SYMBOL * SETZEROSPEED);
+    motor4.Set_Target_Omega(MOTOR4_DERECTION_SYMBOL * SETZEROSPEED);
 
     zero4_state == ZERO_WAIT_PRESS;
 
@@ -478,10 +486,42 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
  * 
  */
 
-float Angle_Round_Transfer(float Angle){
+float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
+    float Absolute_Coordinate = 0.0f , Distance , Round;
+
+    if(&motor == &motor3){ //前端电机
+
+    Absolute_Coordinate = sqrt((FRONT_NODE_LENGTH)*(FRONT_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))*(SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))) - SPRING_ORIGINAL_LENGTH * cos(0.5 * Angle) - FRONT_ZERO_POINT;
+
+    Distance = Absolute_Coordinate - motor.Front_Structure_Now_Coordinate; //表示电机还要运动的距离
+
+    motor.Front_Structure_Now_Coordinate += Distance; //累加坐标
+
+    Round = Distance * DISTANCE_TO_ROUND;
+
+    Distance = 0;
+
+    return Round;
+
+    }
+    else if(&motor == &motor4){ //后端电机
+
+    Absolute_Coordinate = sqrt((REAR_NODE_LENGTH)*(REAR_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))*(SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))) - SPRING_ORIGINAL_LENGTH * cos(0.5 * Angle) - REAR_ZERO_POINT;
+
+    Distance = Absolute_Coordinate - motor.Rear_Structure_Now_Coordinate; //表示电机还要运动的距离
+
+    motor.Rear_Structure_Now_Coordinate += Distance; //累加坐标
+
+    Round = Distance * DISTANCE_TO_ROUND;
+
+    Distance = 0;
+
+    return Round;
+
+
+    }
     
-
 
 }
 
