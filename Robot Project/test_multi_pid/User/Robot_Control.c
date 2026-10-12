@@ -182,13 +182,13 @@ void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C
 
  
 /**
- * @brief 丝杆结构角度控制(空载 仅用于初步拟合)
+ * @brief 丝杆结构角度控制(空载 仅用于初步拟合) 输入为弧度制
  * 
  */
  
 void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
 
-    float Rotate_Num = 0.0f , Rotate_Angle = 0.0f;
+    float Rotate_Num = 0.0f , Rotate_Angle = 0.0f , RAD_Target_Angle = 0.0f;
 
     if(&motor == &motor3){ //前端电机拟合
 
@@ -199,7 +199,7 @@ void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
     else if(&motor == &motor4){
 
         Rotate_Num = Angle_Round_Transfer(0.5 * Target_Angle , motor4);
-        Rotate_Angle = 2 * PI * Rotate_Num * MOTOR3_DERECTION_SYMBOL; 
+        Rotate_Angle = 2 * PI * Rotate_Num * MOTOR4_DERECTION_SYMBOL; 
 
     }
 
@@ -501,6 +501,48 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
 }
 
 /**
+ * @brief 自动拟合函数
+ * 
+ * @param Radius 管道半径
+ * @param Extra 拟合管壁后的余量 使得机器人完全卡紧 可以通过实验修改
+ */
+
+void Auto_Fit_Operation(Class_Motor_C610 &motor , float Radius , float Extra){
+
+
+    if(&motor == &motor3){
+
+        Screw_Structure_Angle_Set( Angle_Caculate_From_Radius(Radius) + Extra , motor3);
+
+    }
+    else if(&motor == &motor4){
+
+        Screw_Structure_Angle_Set( Angle_Caculate_From_Radius(Radius) + Extra , motor4);
+
+    }
+
+}
+
+/**
+ * @brief 初始化机械结构 调零后卡紧管壁
+ * 
+ * @param Radius 管道半径
+ */
+ 
+void Structure_Init(float Radius , float Extra){
+
+    Operate_Motor_Set_Zero(motor3);
+    Operate_Motor_Set_Zero(motor4);
+
+    HAL_Delay(15000);
+
+    Auto_Fit_Operation(motor3 , Radius , Extra);
+    Auto_Fit_Operation(motor4 , Radius , Extra);
+
+}
+
+
+/**
  * @brief 转换角度与旋转圈数
  * 
  */
@@ -513,7 +555,7 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
     Absolute_Coordinate = sqrt((FRONT_NODE_LENGTH)*(FRONT_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))*(SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))) - SPRING_ORIGINAL_LENGTH * cos(0.5 * Angle) - FRONT_ZERO_POINT;
 
-    Distance = Absolute_Coordinate - motor.Front_Structure_Now_Coordinate; //表示电机还要运动的距离
+    Distance = Absolute_Coordinate - motor.Front_Structure_Now_Coordinate; //表示螺母还要运动的距离
 
     motor.Front_Structure_Now_Coordinate += Distance; //累加坐标
 
@@ -528,7 +570,7 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
     Absolute_Coordinate = sqrt((REAR_NODE_LENGTH)*(REAR_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))*(SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))) - SPRING_ORIGINAL_LENGTH * cos(0.5 * Angle) - REAR_ZERO_POINT;
 
-    Distance = Absolute_Coordinate - motor.Rear_Structure_Now_Coordinate; //表示电机还要运动的距离
+    Distance = Absolute_Coordinate - motor.Rear_Structure_Now_Coordinate; //表示螺母还要运动的距离
 
     motor.Rear_Structure_Now_Coordinate += Distance; //累加坐标
 
@@ -541,6 +583,23 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
     }
     
+
+}
+
+/**
+ * @brief 半径为Radius的管子张开角度
+ * 
+ * @param Radius 管子半径 RADIUS是轮子半径
+ * @return float 弧度制
+ */
+
+float Angle_Caculate_From_Radius(float Radius){
+
+    float Span_Angle = 0.0f;
+
+    Span_Angle = asin( TOTAL_LENGTH / (Radius - RADIUS) ) * 2;
+
+    return Span_Angle;
 
 }
 

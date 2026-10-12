@@ -46,8 +46,8 @@
 #define BACKSPEED 2 //螺母触点后回退,电机角速度 单位rad/s
 
 #define SPRING_ORIGINAL_LENGTH 0.1 //弹簧原长 单位米
-#define SCREW_PITCH 0.001 //螺距 单位米
-#define SCREW_NUM 1 //螺纹数量
+#define ROUNDDISTANCE 0.004 //丝杆转一圈螺母上升高度 单位米
+#define DISTANCE_TO_ROUND (1.0f / ROUNDDISTANCE) //路程转换为圈数
 
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离
@@ -142,6 +142,6 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor);//调零启动函数
 
 
 //转换计算函数
-
+float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor);
 
 #endif

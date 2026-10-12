@@ -73,11 +73,11 @@ Class_Motor_C610 motor4;
 
 float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed, //机器人距离与速度控制
 
-      Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed; //旋转测距速度控制
+      Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed, //旋转测距速度控制
 
       //丝杆结构角度控制放在c610类中
       
-      
+      Tube_Radius , Extra_Angle; //管道半径与角度余量
 
 uint32_t Counter = 0;
 
@@ -169,6 +169,7 @@ int main(void)
   Set_M2006_Omega_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);
   Set_M2006_Angle_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);//PID参数设置
 
+  Structure_Init(Tube_Radius , Extra_Angle); //调零与结构自适应 调整PID参数时注释
 
   /* USER CODE END 2 */
 
