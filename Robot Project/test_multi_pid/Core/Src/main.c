@@ -169,7 +169,7 @@ int main(void)
   Set_M2006_Omega_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);
   Set_M2006_Angle_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);//PID参数设置
 
-  Structure_Init(Tube_Radius , Extra_Angle);
+  Structure_Init(Tube_Radius , Extra_Angle); //调零与结构自适应 调整PID参数时注释
 
   /* USER CODE END 2 */
 
