@@ -3,6 +3,10 @@
 //定义一下.h中的extern变量
 float Robot_Move_Target_Delta_Distance = 0.0f;
 float Robot_Move_Start_Angle = 0.0f;
+float motor3_Target_Delta_Revolutions = 0.0f;
+float motor3_Start_Angle = 0.0f;
+float motor4_Target_Delta_Revolutions = 0.0f;
+float motor4_Start_Angle = 0.0f;
 
 Zero_State zero3_state = ZERO_WAIT_PRESS;
 Zero_State zero4_state = ZERO_WAIT_PRESS;
@@ -159,6 +163,24 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
 
 }
 
+
+void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C610 &motor){
+    
+    if(&motor == &motor3){
+        motor3_Start_Angle = motor3.Get_Now_Angle();
+        motor3_Target_Delta_Revolutions = Target_Revolutions;
+    motor3.Set_Target_Angle(motor3_Start_Angle + motor3_Target_Delta_Revolutions * 2 * PI);
+    }
+    
+    else if(&motor == &motor4){
+        motor4_Start_Angle = motor4.Get_Now_Angle();
+        motor4_Target_Delta_Revolutions = Target_Revolutions;
+    motor4.Set_Target_Angle(motor4_Start_Angle + motor4_Target_Delta_Revolutions * 2 * PI);
+    }
+
+ }
+
+ 
 /**
  * @brief 丝杆结构角度控制(空载 仅用于初步拟合) 输入为弧度制
  * 
