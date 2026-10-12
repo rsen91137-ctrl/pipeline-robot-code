@@ -1,5 +1,6 @@
 #include "Robot_Control.h"
 
+//定义一下.h中的extern变量
 float Robot_Move_Target_Delta_Distance = 0.0f;
 float Robot_Move_Start_Angle = 0.0f;
 
@@ -142,12 +143,8 @@ void Move_Forward_Speed_Control(float Robot_Target_Speed , float Wheel_Omega_Rat
 
 
 void Robot_Move_Distance_Control(float Robot_Target_Distance, float Wheel_Omega_Ratio, float Wheel_Radius, Class_Motor_C620 &motor){
-    static float pre_Robot_Target_Distance = 0.0f;
-     if (Math_Abs(Robot_Target_Distance - pre_Robot_Target_Distance) > 0.0001f){
         Robot_Move_Target_Delta_Distance = Robot_Target_Distance; // 存下 ta
         Robot_Move_Start_Angle = motor.Get_Now_Angle(); // 存下基准角
-        pre_Robot_Target_Distance = Robot_Target_Distance;
-    }
     motor.Set_Target_Angle(Robot_Move_Start_Angle + Robot_Move_Target_Delta_Distance * Wheel_Omega_Ratio / Wheel_Radius);
 }
 
