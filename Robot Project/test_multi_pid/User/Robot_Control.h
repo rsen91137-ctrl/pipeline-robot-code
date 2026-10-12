@@ -13,7 +13,6 @@
 #include "stdio.h"
 #include "oled.h"
 #include "string.h"
-#include "math.h"
 
 #define ANGLE_TO_RADS ( / 180.0f)
 #define RADS_TO_RPM (60.0f / (2.0f * PI))
@@ -21,12 +20,14 @@
 #define RADIUS 0.018 //驱动轮半径 暂时填0.0018
 #define MOTOR_WHEEL_OMEGA_RATIO 1.0
 
-#define MOTOR3_DERECTION_SYMBOL (+1.0f) 
-/*设前端电机motor3将螺母向正方向移动(从零点向下 拉开力臂 即正向移动,向零点靠近 收缩力臂 即反向移动)需要设置的速度与角度正负号
+#define MOTOR3_POSITIVE_DERECTION_SYMBOL (+1.0f) 
+#define MOTOR3_NEGATIVE_DERECTION_SYMBOL (-1.0f)
+/*设前端电机motor3将螺母向正/负方向移动(从零点向下 拉开力臂 即正向移动,向零点靠近 收缩力臂 即反向移动)需要设置的速度与角度正负号
  例如实际安装后 目标设为+45 实际可能是反方向运动
-  所以先设定方向 假设它们相同 方便修改*/
+  所以先设定方向 方便修改*/
 
-#define MOTOR4_DERECTION_SYMBOL (+1.0f) 
+#define MOTOR4_POSITIVE_DERECTION_SYMBOL (+1.0f) 
+#define MOTOR4_NEGATIVE_DERECTION_SYMBOL (-1.0f)
 //同上
 
 #define FRONT_ANGLE_MINIMUM 20 //前端力臂最小夹角 角度制
@@ -45,12 +46,16 @@
 #define BACKSPEED 2 //螺母触点后回退,电机角速度 单位rad/s
 
 #define SPRING_ORIGINAL_LENGTH 0.1 //弹簧原长 单位米
-#define ROUNDDISTANCE 0.004 //丝杆转一圈螺母上升高度 单位米
-#define DISTANCE_TO_ROUND (1.0f / ROUNDDISTANCE) //路程转换为圈数
+#define SCREW_PITCH 0.001 //螺距 单位米
+#define SCREW_NUM 1 //螺纹数量
 
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离
 extern float Robot_Move_Start_Angle;             // 记录每次移动距离ta指令发出后的起始角度，便于计算当前距离
+extern float motor3_Target_Delta_Revolutions;
+extern float motor3_Start_Angle;
+extern float motor4_Target_Delta_Revolutions;
+extern float motor4_Start_Angle;
 
 // float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed,
 //       Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed,
@@ -102,7 +107,10 @@ void Robot_Move_Distance_Control(float Robot_Target_Distance, float Wheel_Omega_
 
 void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class_Motor_GM6020 &motor2);
 
-void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);
+void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C610 &motor);  //M2006旋转指定圈数
+
+void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);  //丝杆结构角度控制(空载 仅用于初步拟合)
+
 
 
 //PID运算
@@ -134,6 +142,6 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor);//调零启动函数
 
 
 //转换计算函数
-float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor);
+
 
 #endif
