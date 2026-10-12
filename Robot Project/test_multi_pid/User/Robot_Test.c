@@ -162,14 +162,6 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         }
         break;
         case(18):{
-            M2006_Rotate_Specified_Revolutions(serialplot.Get_Variable_Value(),motor3);
-        }
-        break;
-        case(19):{
-            M2006_Rotate_Specified_Revolutions(serialplot.Get_Variable_Value(),motor4);
-        }
-        break;
-        case(20):{
 
             if(serialplot.Get_Variable_Value() == 0){
 
@@ -184,7 +176,7 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
 
         };
         break;
-        case(21):{
+        case(19):{
 
             if(serialplot.Get_Variable_Value() == 0){
 
@@ -208,8 +200,8 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
  * 
  */
 
-void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4 , float Wheel_Omega_Ratio , float Wheel_Radius){
-    float Robot_Target_Speed, Robot_Now_Speed,Rotate_Target_Speed, Rotate_Now_Speed, Robot_Target_Distance, Robot_Now_Distance, motor3_Target_Revolutions, motor3_Now_Revolutions, motor4_Target_Revolutions, motor4_Now_Revolutions;
+void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , float Wheel_Omega_Ratio , float Wheel_Radius){
+    float Robot_Target_Speed, Robot_Now_Speed,Rotate_Target_Speed, Rotate_Now_Speed, Robot_Target_Distance, Robot_Now_Distance;
 
     Robot_Target_Speed = motor.Get_Target_Omega() * Wheel_Radius / Wheel_Omega_Ratio;
     Rotate_Target_Speed = motor2.Get_Target_Omega() * RADS_TO_RPM;
@@ -220,12 +212,7 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
     Robot_Target_Distance = Robot_Move_Target_Delta_Distance;   // 显示 ta（本次要走的距离）
     Robot_Now_Distance = (motor.Get_Now_Angle() - Robot_Move_Start_Angle) * Wheel_Radius / Wheel_Omega_Ratio;    // 从指令起点累计的当前距离
 
-    motor3_Target_Revolutions = motor3_Target_Delta_Revolutions; // 显示本次要旋转的圈数
-    motor3_Now_Revolutions = (motor3.Get_Now_Angle() - motor3_Start_Angle) / (2 * PI); // 从指令起点累计的当前圈数
-    motor4_Target_Revolutions = motor4_Target_Delta_Revolutions; // 显示本次要旋转的圈数
-    motor4_Now_Revolutions = (motor4.Get_Now_Angle() - motor4_Start_Angle) / (2 * PI); // 从指令起点累计的当前圈数
-
-    serialplot.Set_Data(10,&Robot_Target_Speed, &Robot_Now_Speed, &Rotate_Target_Speed, &Rotate_Now_Speed, &Robot_Target_Distance, &Robot_Now_Distance, &motor3_Target_Revolutions, &motor3_Now_Revolutions, &motor4_Target_Revolutions, &motor4_Now_Revolutions);
+    serialplot.Set_Data(6,&Robot_Target_Speed, &Robot_Now_Speed, &Rotate_Target_Speed, &Rotate_Now_Speed, &Robot_Target_Distance, &Robot_Now_Distance);
     serialplot.TIM_Write_PeriodElapsedCallback();
 
     TIM_UART_PeriodElapsedCallback();
