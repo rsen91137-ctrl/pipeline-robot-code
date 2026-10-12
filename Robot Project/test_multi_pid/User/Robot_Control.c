@@ -160,7 +160,7 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
 }
 
 /**
- * @brief 丝杆结构角度控制(空载 仅用于初步拟合)
+ * @brief 丝杆结构角度控制(空载 仅用于初步拟合) 输入为角度
  * 
  */
  
@@ -177,8 +177,7 @@ void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
     else if(&motor == &motor4){
 
         Rotate_Num = Angle_Round_Transfer(0.5 * Target_Angle , motor4);
-        Rotate_Angle = 2 * PI * Rotate_Num * MOTOR3_DERECTION_SYMBOL; 
-
+        Rotate_Angle = 2 * PI * Rotate_Num * MOTOR4_DERECTION_SYMBOL; 
     }
 
  }
@@ -491,7 +490,7 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
     Absolute_Coordinate = sqrt((FRONT_NODE_LENGTH)*(FRONT_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))*(SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))) - SPRING_ORIGINAL_LENGTH * cos(0.5 * Angle) - FRONT_ZERO_POINT;
 
-    Distance = Absolute_Coordinate - motor.Front_Structure_Now_Coordinate; //表示电机还要运动的距离
+    Distance = Absolute_Coordinate - motor.Front_Structure_Now_Coordinate; //表示螺母还要运动的距离
 
     motor.Front_Structure_Now_Coordinate += Distance; //累加坐标
 
@@ -506,7 +505,7 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
     Absolute_Coordinate = sqrt((REAR_NODE_LENGTH)*(REAR_NODE_LENGTH) - (SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))*(SPRING_ORIGINAL_LENGTH * sin(0.5 * Angle))) - SPRING_ORIGINAL_LENGTH * cos(0.5 * Angle) - REAR_ZERO_POINT;
 
-    Distance = Absolute_Coordinate - motor.Rear_Structure_Now_Coordinate; //表示电机还要运动的距离
+    Distance = Absolute_Coordinate - motor.Rear_Structure_Now_Coordinate; //表示螺母还要运动的距离
 
     motor.Rear_Structure_Now_Coordinate += Distance; //累加坐标
 
@@ -519,6 +518,14 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor){
 
     }
     
+
+}
+
+float Angle_Caculate_From_Radius(float Radius){
+
+    float Span_Angle = 0.0f;
+
+    Span_Angle = asin( TOTAL_LENGTH / (Radius - RADIUS) );
 
 }
 
