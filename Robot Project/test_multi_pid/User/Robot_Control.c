@@ -163,15 +163,21 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
 }
 
 /**
- * @brief 前端丝杆结构角度控制(空载 仅用于初步拟合)
+ * @brief 丝杆结构角度控制(空载 仅用于初步拟合)
  * 
  */
  
-void Front_Structure_Angle_Set(){
+void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
 
+    float Rotate_Num = 0.0f;
 
+    if(&motor == &motor3){ //前端电机拟合
 
-}
+        Rotate_Num = 0;
+
+    }
+
+ }
 
 
 /**
@@ -444,10 +450,10 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
 
     if(&motor == &motor3){
 
-    if(zero3_state == ZERO_DONE){ //判断是否为非调零中状态
+    if(zero3_state == ZERO_DONE){ //判断是否为非调零中状态 调零时向下运动 为正方向
 
     motor3.Set_Control_Method(Control_Method_OMEGA);
-    motor3.Set_Target_Omega(SETZEROSPEED);
+    motor3.Set_Target_Omega(MOTOR3_POSITIVE_DERECTION_SYMBOL * SETZEROSPEED);
 
     zero3_state == ZERO_WAIT_PRESS;
 
@@ -458,7 +464,7 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
     if(zero4_state == ZERO_DONE){ //判断是否为非调零中状态
 
     motor4.Set_Control_Method(Control_Method_OMEGA);
-    motor4.Set_Target_Omega(SETZEROSPEED);
+    motor4.Set_Target_Omega(MOTOR4_POSITIVE_DERECTION_SYMBOL * SETZEROSPEED);
 
     zero4_state == ZERO_WAIT_PRESS;
 
@@ -467,6 +473,17 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor){
 
 }
 
+/**
+ * @brief 转换角度与旋转圈数
+ * 
+ */
+
+float Angle_Round_Transfer(float Angle){
+
+    
+
+
+}
 
 
 

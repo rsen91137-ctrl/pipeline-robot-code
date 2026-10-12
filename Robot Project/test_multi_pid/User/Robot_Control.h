@@ -46,6 +46,8 @@
 #define BACKSPEED 2 //螺母触点后回退,电机角速度 单位rad/s
 
 #define SPRING_ORIGINAL_LENGTH 0.1 //弹簧原长 单位米
+#define SCREW_PITCH 0.001 //螺距 单位米
+#define SCREW_NUM 1 //螺纹数量
 
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离
@@ -101,6 +103,8 @@ void Robot_Move_Distance_Control(float Robot_Target_Distance, float Wheel_Omega_
 
 void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class_Motor_GM6020 &motor2);
 
+void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);
+
 
 //PID运算
 void Forward_PID_Processing(Class_Motor_C620 &motor);
@@ -128,5 +132,9 @@ void Motor_Set_Zero(Class_Motor_C610 &motor);//调零执行函数
 void Motor_Back(Class_Motor_C610 &motor);//电机回转函数
 
 void Operate_Motor_Set_Zero(Class_Motor_C610 &motor);//调零启动函数
+
+
+//转换计算函数
+
 
 #endif
