@@ -103,7 +103,10 @@ void Robot_Move_Distance_Control(float Robot_Target_Distance, float Wheel_Omega_
 
 void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class_Motor_GM6020 &motor2);
 
-void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);
+void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C610 &motor);  //M2006旋转指定圈数
+
+void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);  //丝杆结构角度控制(空载 仅用于初步拟合)
+
 
 
 //PID运算

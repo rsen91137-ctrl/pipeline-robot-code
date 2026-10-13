@@ -188,7 +188,7 @@ int main(void)
 
         Angle_Adjusting_PID_Processing(motor3 , motor4);
       
-        Robot_Test_Serialplot_Plot(serialplot , motor , motor2 , MOTOR_WHEEL_OMEGA_RATIO , RADIUS);
+        Robot_Test_Serialplot_Plot(serialplot , motor , motor2 , motor3 , motor4 , MOTOR_WHEEL_OMEGA_RATIO , RADIUS);
 
         HAL_Delay(0);
     
