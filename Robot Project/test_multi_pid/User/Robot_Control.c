@@ -3,6 +3,10 @@
 //定义一下.h中的extern变量
 float Robot_Move_Target_Delta_Distance = 0.0f;
 float Robot_Move_Start_Angle = 0.0f;
+float motor3_Target_Delta_Revolutions = 0.0f;
+float motor3_Start_Angle = 0.0f;
+float motor4_Target_Delta_Revolutions = 0.0f;
+float motor4_Start_Angle = 0.0f;
 
 Zero_State zero3_state = ZERO_WAIT_PRESS;
 Zero_State zero4_state = ZERO_WAIT_PRESS;
@@ -14,22 +18,22 @@ Zero_State zero4_state = ZERO_WAIT_PRESS;
 void Robot_Control_Init(Class_Motor_C620 &motor, Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4){
 
     motor.PID_Angle.Init(0.0f, 0.0f, 0.0f, 0.0f, 15.0f * PI, 15.0f * PI);
-    motor.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 2500.0f, 2500.0f);
+    motor.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 2500.0f, 5000.0f);
     motor.Init(&hcan1, CAN_Motor_ID_0x201, Control_Method_OMEGA, 3591.0f / 187.0f); 
     //初始化为速度环
 
     motor2.PID_Angle.Init(0.0f, 0.0f, 0.0f, 0.0f, 15.0f * PI, 15.0f * PI);
-    motor2.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 2500.0f, 2500.0f);
+    motor2.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 2500.0f, 3000.0f);
     motor2.Init(&hcan1, CAN_Motor_ID_0x206, Control_Method_OMEGA, 1.0f); 
     //初始化为速度环
 
     motor3.PID_Angle.Init(0.0f, 0.0f, 0.0f, 0.0f, 15.0f * PI, 15.0f * PI);
-    motor3.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 2500.0f, 2500.0f);
+    motor3.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 4000.0f);
     motor3.Init(&hcan1, CAN_Motor_ID_0x202, Control_Method_ANGLE,36.0f);
     //初始化为角度环
     
     motor4.PID_Angle.Init(0.0f, 0.0f, 0.0f, 0.0f, 15.0f * PI, 15.0f * PI);
-    motor4.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 2500.0f, 2500.0f);
+    motor4.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 4000.0f);
     motor4.Init(&hcan1, CAN_Motor_ID_0x203, Control_Method_ANGLE,36.0f);
     //初始化为角度环
 
@@ -155,10 +159,34 @@ void Robot_Move_Distance_Control(float Robot_Target_Distance, float Wheel_Omega_
 
 void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class_Motor_GM6020 &motor2) {
 
-    motor2.Set_Target_Omega(Rotate_Target_Speed * RPM_TO_RADPS);
+    motor2.Set_Target_Omega(Rotate_Target_Speed * RPM_TO_RADS);
 
 }
 
+/**
+ * @brief 控制M2006旋转角度
+ * 
+ * @param Target_Revolutions 弧度制
+ * @param motor 
+ */
+
+void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C610 &motor){
+    
+    if(&motor == &motor3){
+        motor3_Start_Angle = motor3.Get_Now_Angle();
+        motor3_Target_Delta_Revolutions = Target_Revolutions;
+        motor3.Set_Target_Angle(motor3_Start_Angle + motor3_Target_Delta_Revolutions * 2 * PI);
+    }
+    
+    else if(&motor == &motor4){
+        motor4_Start_Angle = motor4.Get_Now_Angle();
+        motor4_Target_Delta_Revolutions = Target_Revolutions;
+        motor4.Set_Target_Angle(motor4_Start_Angle + motor4_Target_Delta_Revolutions * 2 * PI);
+    }
+
+ }
+
+ 
 /**
  * @brief 丝杆结构角度控制(空载 仅用于初步拟合) 输入为弧度制
  * 
@@ -172,17 +200,80 @@ void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
 
         Rotate_Num = Angle_Round_Transfer(0.5f * Target_Angle , motor3);
         Rotate_Angle = 2.0f * PI * Rotate_Num * MOTOR3_DERECTION_SYMBOL;
+        M2006_Rotate_Specified_Revolutions(Rotate_Angle , motor3);
 
     }
     else if(&motor == &motor4){
 
         Rotate_Num = Angle_Round_Transfer(0.5f * Target_Angle , motor4);
         Rotate_Angle = 2.0f * PI * Rotate_Num * MOTOR4_DERECTION_SYMBOL; 
+        M2006_Rotate_Specified_Revolutions(Rotate_Angle , motor4);
 
     }
 
  }
 
+/**
+ * @brief 电机停机函数 由于PID处理有判断条件 所以输入target_value无法立即 所以封装为函数
+ * 
+ * @param name 
+ */
+
+
+void Motor_Stop_Operation(Motor_Name name){
+
+    if(name == M3508){
+
+        if(motor.Get_Control_Method() == Control_Method_ANGLE){
+
+            Robot_Move_Target_Delta_Distance = 1e-6;
+
+        }
+
+        if(motor.Get_Control_Method() == Control_Method_OMEGA){
+
+             motor.Set_Target_Omega(1e-6);
+
+        }
+
+    }
+    else if(name == GM6020){
+
+        motor2.Set_Target_Omega(1e-6);
+
+    }
+    else if(name == M2006_Front){
+
+       if(motor3.Get_Control_Method() == Control_Method_ANGLE){
+
+            motor3_Target_Delta_Revolutions = 1e-6;
+
+        }
+
+        if(motor3.Get_Control_Method() == Control_Method_OMEGA){
+
+             motor3.Set_Target_Omega(1e-6);
+
+        }
+        
+    }
+    else if(name == M2006_Rear){
+
+       if(motor4.Get_Control_Method() == Control_Method_ANGLE){
+
+            motor4_Target_Delta_Revolutions = 1e-6;
+
+        }
+
+        if(motor4.Get_Control_Method() == Control_Method_OMEGA){
+
+             motor4.Set_Target_Omega(1e-6);
+
+        }
+
+    }
+
+ }
 
 /**
  * @brief 驱动电机M3508的PID计算以及传回电机
@@ -239,13 +330,41 @@ void Rotate_PID_Processing(Class_Motor_GM6020 &motor2){
  */
 
 
-void Angle_Adjusting_PID_Processing(Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4){
+void Angle_Adjusting_PID_Processing(Class_Motor_C610 &motor){
 
-    motor3.TIM_PID_PeriodElapsedCallback(); //PID计算
-    TIM_CAN_PeriodElapsedCallback(); //传回电机进行控制
+    if(&motor == &motor3){
 
-    motor4.TIM_PID_PeriodElapsedCallback(); //PID计算
-    TIM_CAN_PeriodElapsedCallback(); //传回电机进行控制
+        if(motor3.Get_Control_Method() == Control_Method_ANGLE && motor3_Target_Delta_Revolutions != 0){
+
+            motor3.TIM_PID_PeriodElapsedCallback(); //PID计算
+            TIM_CAN_PeriodElapsedCallback(); //传回电机进行控制
+
+        }
+        else if(motor3.Get_Control_Method() == Control_Method_OMEGA && motor3.Get_Target_Omega() != 0 ){
+
+            motor3.TIM_PID_PeriodElapsedCallback(); 
+            TIM_CAN_PeriodElapsedCallback(); 
+
+        }
+
+    }
+
+    else if(&motor == &motor4){
+
+        if(motor4.Get_Control_Method() == Control_Method_ANGLE && motor4_Target_Delta_Revolutions != 0){
+
+            motor4.TIM_PID_PeriodElapsedCallback(); //PID计算
+            TIM_CAN_PeriodElapsedCallback(); //传回电机进行控制
+
+        }
+        else if(motor4.Get_Control_Method() == Control_Method_OMEGA && motor4.Get_Target_Omega() != 0 ){
+
+            motor4.TIM_PID_PeriodElapsedCallback(); 
+            TIM_CAN_PeriodElapsedCallback(); 
+
+        }
+
+    }
 
 }
 
@@ -401,8 +520,7 @@ void Motor_Set_Zero(Class_Motor_C610 &motor){
 
     motor3.Set_Control_Method(Control_Method_ANGLE); //切换回角度环
 
-    motor3.Set_Target_Angle(motor3.Get_Now_Angle());
-    motor3.Set_Target_Omega(0.0f); //停机
+    Motor_Stop_Operation(M2006_Front); //停机
 
     motor3.Front_Structure_Now_Angle = FRONT_ANGLE_MINIMUM; //设置零点
     motor3.Front_Structure_Now_Coordinate = 0;
@@ -412,8 +530,7 @@ void Motor_Set_Zero(Class_Motor_C610 &motor){
 
     motor4.Set_Control_Method(Control_Method_ANGLE); //切换回角度环
 
-    motor4.Set_Target_Angle(motor4.Get_Now_Angle());
-    motor4.Set_Target_Omega(0.0f); //停机
+    Motor_Stop_Operation(M2006_Rear); //停机
 
     motor4.Front_Structure_Now_Angle = REAR_ANGLE_MINIMUM; //设置零点
     motor4.Front_Structure_Now_Coordinate = 0;

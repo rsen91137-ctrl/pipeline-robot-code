@@ -20,7 +20,7 @@
 /* Exported macros -----------------------------------------------------------*/
 
 // RPM换算到rad/s
-#define RPM_TO_RADPS (2.0f * PI / 60.0f)
+#define RPM_TO_RADS (2.0f * PI / 60.0f)
 
 /* Exported types ------------------------------------------------------------*/
 
@@ -90,7 +90,7 @@ public:
     // PID扭矩环控制
     Class_PID PID_Torque;
 
-    void Init(CAN_HandleTypeDef *__hcan, Enum_CAN_Motor_ID __CAN_ID, Enum_Control_Method __Control_Method = Control_Method_ANGLE, int32_t __Encoder_Offset = 0, float __Omega_Max = 320.0f * RPM_TO_RADPS);
+    void Init(CAN_HandleTypeDef *__hcan, Enum_CAN_Motor_ID __CAN_ID, Enum_Control_Method __Control_Method = Control_Method_ANGLE, int32_t __Encoder_Offset = 0, float __Omega_Max = 320.0f * RPM_TO_RADS);
 
     uint16_t Get_Output_Max();
     Enum_CAN_Motor_Status Get_CAN_Motor_Status();
@@ -113,6 +113,8 @@ public:
     void CAN_RxCpltCallback(uint8_t *Rx_Data);
     void TIM_Alive_PeriodElapsedCallback();
     void TIM_PID_PeriodElapsedCallback(); //修改
+
+    //void Stop_GM6020();
 
 protected:
     //初始化相关变量
@@ -227,6 +229,8 @@ public:
     void CAN_RxCpltCallback(uint8_t *Rx_Data);
     void TIM_Alive_PeriodElapsedCallback();
     void TIM_PID_PeriodElapsedCallback();
+
+    //void Stop_M2006();
 
     float Front_Structure_Now_Angle, Rear_Structure_Now_Angle , Front_Structure_Target_Angle, Rear_Structure_Target_Angle; //丝杆角度控制
     float Front_Structure_Now_Coordinate, Rear_Structure_Now_Coordinate;
@@ -344,6 +348,8 @@ public:
     void CAN_RxCpltCallback(uint8_t *Rx_Data);
     void TIM_Alive_PeriodElapsedCallback();
     void TIM_PID_PeriodElapsedCallback();
+
+    //void Stop_M3508();
 
 protected:
     //初始化相关变量

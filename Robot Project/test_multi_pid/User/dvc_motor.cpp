@@ -386,7 +386,7 @@ void Class_Motor_GM6020::CAN_RxCpltCallback(uint8_t *Rx_Data) //改了一下方�
     Total_Encoder = Total_Round * Encoder_Num_Per_Round + Rx_Encoder + Encoder_Offset;
 
     Now_Angle = (float)Total_Encoder / (float)Encoder_Num_Per_Round * 2.0f * PI;
-    Now_Omega = (float)Rx_Omega * RPM_TO_RADPS;
+    Now_Omega = (float)Rx_Omega * RPM_TO_RADS;
      //Now_Torque = Rx_Torque;
      //Now_Temperature = Rx_Temperature; //不需要温度和力矩
 }
@@ -471,6 +471,15 @@ void Class_Motor_GM6020::TIM_PID_PeriodElapsedCallback() //改了一下方便修
     }
     Output();
 }
+
+// void Class_Motor_GM6020::Stop_GM6020()
+// {
+//     Target_Omega = 0.0f;
+//     PID_Omega.Set_Integral_Error(0.0f);
+//     Set_Out(0.0f);
+//     Output();
+//     TIM_CAN_PeriodElapsedCallback();
+// }
 
 /**
  * @brief 电机初始化
@@ -700,7 +709,7 @@ void Class_Motor_C610::CAN_RxCpltCallback(uint8_t *Rx_Data)
     Total_Encoder = Total_Round * Encoder_Num_Per_Round + Rx_Encoder;
 
     Now_Angle = (float)Total_Encoder / (float)Encoder_Num_Per_Round * 2.0f * PI / Gearbox_Rate;
-    Now_Omega = (float)Rx_Omega * RPM_TO_RADPS / Gearbox_Rate;
+    Now_Omega = (float)Rx_Omega * RPM_TO_RADS / Gearbox_Rate;
     Now_Torque = Rx_Torque;
     Now_Temperature = Rx_Temperature;
 }
@@ -779,6 +788,15 @@ void Class_Motor_C610::TIM_PID_PeriodElapsedCallback()
     }
     Output();
 }
+
+// void Class_Motor_C610::Stop_M2006()
+// {
+//     Target_Omega = 0.0f;
+//     PID_Omega.Set_Integral_Error(0.0f);
+//     Set_Out(0.0f);
+//     Output();
+//     TIM_CAN_PeriodElapsedCallback();
+// }
 
 /**
  * @brief 电机初始化
@@ -1008,7 +1026,7 @@ void Class_Motor_C620::CAN_RxCpltCallback(uint8_t *Rx_Data)
     Total_Encoder = Total_Round * Encoder_Num_Per_Round + Rx_Encoder;
 
     Now_Angle = (float)Total_Encoder / (float)Encoder_Num_Per_Round * 2.0f * PI / Gearbox_Rate;
-    Now_Omega = (float)Rx_Omega * RPM_TO_RADPS / Gearbox_Rate;
+    Now_Omega = (float)Rx_Omega * RPM_TO_RADS / Gearbox_Rate;
     Now_Torque = Rx_Torque;
     Now_Temperature = Rx_Temperature;
 }
@@ -1087,5 +1105,14 @@ void Class_Motor_C620::TIM_PID_PeriodElapsedCallback()
     }
     Output();
 }
+
+// void Class_Motor_C620::Stop_M3508()
+// {
+//     Target_Omega = 0.0f;
+//     PID_Omega.Set_Integral_Error(0.0f);
+//     Set_Out(0.0f);
+//     Output();
+//     TIM_CAN_PeriodElapsedCallback();
+// }
 
 /************************ COPYRIGHT(C) USTC-ROBOWALKER **************************/

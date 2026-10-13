@@ -52,6 +52,10 @@
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离
 extern float Robot_Move_Start_Angle;             // 记录每次移动距离ta指令发出后的起始角度，便于计算当前距离
+extern float motor3_Target_Delta_Revolutions;
+extern float motor3_Start_Angle;
+extern float motor4_Target_Delta_Revolutions;
+extern float motor4_Start_Angle;
 
 // float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed,
 //       Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed,
@@ -68,9 +72,19 @@ enum Zero_State
     ZERO_DONE        // 已松开，调零完成
 };
 
+typedef enum{
+    M3508,
+    GM6020,
+    M2006_Front, //motor3
+    M2006_Rear //motor4
+}Motor_Name;
+
 extern Zero_State zero3_state;
 extern Zero_State zero4_state;
 
+extern Class_Serialplot serialplot;
+extern Class_Motor_C620 motor; 
+extern Class_Motor_GM6020 motor2; 
 extern Class_Motor_C610 motor3;
 extern Class_Motor_C610 motor4;
 
@@ -105,16 +119,16 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
 
 void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C610 &motor);  //M2006旋转指定圈数
 
-void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);  //丝杆结构角度控制(空载 仅用于初步拟合)
+void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);
 
-
+void Motor_Stop_Operation(Motor_Name name);
 
 //PID运算
 void Forward_PID_Processing(Class_Motor_C620 &motor);
 
 void Rotate_PID_Processing(Class_Motor_GM6020 &motor2);
 
-void Angle_Adjusting_PID_Processing(Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4);
+void Angle_Adjusting_PID_Processing(Class_Motor_C610 &motor);
 
 
 //反馈

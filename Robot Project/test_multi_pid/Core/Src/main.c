@@ -57,19 +57,17 @@
 
 /* USER CODE BEGIN PV */
 
-Class_Serialplot serialplot;
-
-Class_Motor_C620 motor; //这里定义是c620电调
-Class_Motor_GM6020 motor2; //这里定义是GM6020电机
-
-Class_Motor_C610 motor3; //两个M2006电机
-Class_Motor_C610 motor4;
-
 /*
 
       Motor3为前端丝杆结构控制电机 Motor4为后端丝杆结构控制电机
 
       */
+
+Class_Motor_C620 motor;
+Class_Motor_GM6020 motor2;
+Class_Motor_C610 motor3;
+Class_Motor_C610 motor4;
+Class_Serialplot serialplot;
 
 float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed, //机器人距离与速度控制
 
@@ -114,7 +112,7 @@ void CAN_Motor_Call_Back(Struct_CAN_Rx_Buffer *Rx_Buffer)
  */
  void UART_Serialplot_Call_Back(uint8_t *Buffer, uint16_t Length)
  {
-     Robot_Test_Serialplot_Call_Back_Configuration(Buffer , Length, serialplot, motor, motor2,&Robot_Target_Speed,&Robot_Target_Distance,&Rotate_Target_Speed,&Rotate_Target_Angle);
+     Robot_Test_Serialplot_Call_Back_Configuration(Buffer , Length, serialplot, motor, motor2, motor3 ,&Robot_Target_Speed,&Robot_Target_Distance,&Rotate_Target_Speed,&Rotate_Target_Angle);
 
  } //串口调试 不用时和下面一起注释
 
@@ -169,7 +167,10 @@ int main(void)
   Set_M2006_Omega_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);
   Set_M2006_Angle_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);//PID参数设置
 
-  Structure_Init(Tube_Radius , Extra_Angle); //调零与结构自适应 调整PID参数时注释
+  zero3_state = ZERO_DONE;
+  zero4_state = ZERO_DONE; 
+
+  //Structure_Init(Tube_Radius , Extra_Angle); //调零与结构自适应 调整PID参数时注释
 
   /* USER CODE END 2 */
 
@@ -186,7 +187,8 @@ int main(void)
 
         Rotate_PID_Processing(motor2);
 
-        Angle_Adjusting_PID_Processing(motor3 , motor4);
+        Angle_Adjusting_PID_Processing(motor3);
+        Angle_Adjusting_PID_Processing(motor4);
       
         Robot_Test_Serialplot_Plot(serialplot , motor , motor2 , motor3 , motor4 , MOTOR_WHEEL_OMEGA_RATIO , RADIUS);
 
