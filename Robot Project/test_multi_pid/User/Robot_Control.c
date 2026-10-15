@@ -214,7 +214,7 @@ void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
  }
 
 /**
- * @brief 电机停机函数 由于PID处理有判断条件 所以输入target_value无法立即 所以封装为函数
+ * @brief 电机停机函数 由于PID处理有判断条件 所以输入target_value = 0无法立即停机 所以封装为函数
  * 
  * @param name 
  */
@@ -226,8 +226,7 @@ void Motor_Stop_Operation(Motor_Name name){
 
         if(motor.Get_Control_Method() == Control_Method_ANGLE){
 
-            Robot_Move_Target_Delta_Distance = 1e-6;
-
+            motor.Set_Target_Angle(motor.Get_Now_Angle());
         }
 
         if(motor.Get_Control_Method() == Control_Method_OMEGA){
@@ -246,7 +245,7 @@ void Motor_Stop_Operation(Motor_Name name){
 
        if(motor3.Get_Control_Method() == Control_Method_ANGLE){
 
-            motor3_Target_Delta_Revolutions = 1e-6;
+            motor3.Set_Target_Angle(motor3.Get_Now_Angle());
 
         }
 
@@ -261,7 +260,7 @@ void Motor_Stop_Operation(Motor_Name name){
 
        if(motor4.Get_Control_Method() == Control_Method_ANGLE){
 
-            motor4_Target_Delta_Revolutions = 1e-6;
+            motor4.Set_Target_Angle(motor4.Get_Now_Angle());
 
         }
 
@@ -408,6 +407,23 @@ float Get_Rotate_Now_Speed(Class_Motor_GM6020 &motor2){
 
 }
 
+/**
+ * @brief 获取机器人目前目标速度
+ * 
+ */
+
+float Get_Robot_Target_Speed(){
+
+    return (motor.Get_Target_Omega() * RADIUS / MOTOR_WHEEL_OMEGA_RATIO) ;
+
+}
+
+float Get_Robot_Target_Distance(){
+
+    return (motor.TotalDistance + Robot_Move_Target_Delta_Distance);
+
+
+}
 
 
 /**
@@ -700,6 +716,23 @@ float Angle_Caculate_From_Radius(float Radius){
     Span_Angle = asinf( TOTAL_LENGTH / (Radius - RADIUS) ) * 2.0f;
 
     return Span_Angle;
+
+}
+
+/**
+ * @brief 统计机器人总路程函数 放在systick中
+ * 
+ */
+
+void Caculate_Total_Distance(){
+
+    float TICK = 0.001f;
+
+    if(Get_Robot_Target_Speed() > 1e-6 | Get_Robot_Target_Speed() < 1e-6){
+    
+    motor.TotalDistance += Get_Robot_Now_Speed(motor,MOTOR_WHEEL_OMEGA_RATIO,RADIUS) * TICK;
+
+    }
 
 }
 

@@ -48,13 +48,28 @@ void Dictionary_Define(Class_Serialplot &serialplot){
     //修改PID模式
     "M2006modechange",
 
-    //停机(所有)
+    //停机
     "STOP",
+    "stop3508",
+    "stop6020",
+    "stop2006front",
+    "stop2006rear",
+
+    //丝杆设置
+    "initialize",
+    "setzero",
+
+    //串口发送控制
+    "OperateSending",
+    "DisableSending",
+
+    //断连检测
+    "Online",
 
 
 };
 
-    serialplot.Init(&huart2, 31, (char **)Variable_Assignment_List);
+    serialplot.Init(&huart2, 40, (char **)Variable_Assignment_List);
     
 
 }
@@ -267,7 +282,69 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
 
         }
         break;
+        case(31):{
 
+            Motor_Stop_Operation(M3508);
+
+        }
+        break;
+        case(32):{
+
+            Motor_Stop_Operation(GM6020);
+
+        }
+        break;
+        case(33):{
+
+             Motor_Stop_Operation(M2006_Front);
+
+        }
+        break;
+        case(34):{
+
+            Motor_Stop_Operation(M2006_Rear);
+
+        }
+        break;
+        case(35):{
+
+            if(motor.Get_Now_Omega() < LIMIT){
+
+                Structure_Init(RADIUS,EXTRA);
+
+            }
+
+        }
+        break;
+        case(36):{
+
+            if(motor.Get_Now_Omega() < LIMIT){
+
+                Operate_Motor_Set_Zero(motor3);
+                Operate_Motor_Set_Zero(motor4);
+
+            }
+
+        }
+        break;
+        case(37):{
+
+            IfPlotSending = 1;
+
+        }
+        break;
+        case(38):{
+
+             IfPlotSending = 0;
+
+        }
+        break;
+        case(39):{
+
+
+
+        }
+        break;
     }
 
 }
@@ -278,6 +355,9 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
  */
 
 void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4 , float Wheel_Omega_Ratio , float Wheel_Radius){
+
+    if(IfPlotSending){
+
     float Robot_Target_Speed, Robot_Now_Speed,Rotate_Target_Speed, Rotate_Now_Speed, Robot_Target_Distance, Robot_Now_Distance, motor3_Target_Omega , motor3_Now_Omega ,motor3_Target_Revolutions, motor3_Now_Revolutions/* motor4_Target_Revolutions, motor4_Now_Revolutions*/;
 
     Robot_Target_Speed = motor.Get_Target_Omega() * Wheel_Radius / Wheel_Omega_Ratio;
@@ -297,9 +377,11 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
     //motor4_Target_Revolutions = motor4_Target_Delta_Revolutions; // 显示本次要旋转的圈数
     //motor4_Now_Revolutions = (motor4.Get_Now_Angle() - motor4_Start_Angle) / (2 * PI); // 从指令起点累计的当前圈数
 
-    serialplot.Set_Data(10,&Robot_Target_Speed, &Robot_Now_Speed, &Rotate_Target_Speed, &Rotate_Now_Speed, &Robot_Target_Distance, &Robot_Now_Distance, &motor3_Target_Omega , &motor3_Now_Omega ,&motor3_Target_Revolutions, &motor3_Now_Revolutions /*&motor4_Target_Revolutions, &motor4_Now_Revolution*/ );
+    serialplot.Set_Data(5,&Robot_Target_Speed, &Robot_Now_Speed, &motor.TotalDistance , &Rotate_Target_Speed, &Rotate_Now_Speed /*&motor3_Target_Omega , &motor3_Now_Omega ,&motor3_Target_Revolutions, &motor3_Now_Revolutions ,&motor4_Target_Revolutions, &motor4_Now_Revolution*/ );
     serialplot.TIM_Write_PeriodElapsedCallback();
 
     TIM_UART_PeriodElapsedCallback();
+
+    }
 
 }

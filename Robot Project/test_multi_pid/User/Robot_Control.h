@@ -19,7 +19,7 @@
 #define RADS_TO_RPM (60.0f / (2.0f * PI))
 
 #define RADIUS 0.018f //驱动轮半径 暂时填0.0018
-#define MOTOR_WHEEL_OMEGA_RATIO 1.0f
+#define MOTOR_WHEEL_OMEGA_RATIO 1.0f //3508角速度与驱动轮角速度之比
 
 #define MOTOR3_DERECTION_SYMBOL (+1.0f) 
 /*设前端电机motor3将螺母向正方向移动(从零点向下 拉开力臂 即正向移动,向零点靠近 收缩力臂 即反向移动)需要设置的速度与角度正负号
@@ -48,6 +48,10 @@
 #define ROUNDDISTANCE 0.004f //丝杆转一圈螺母上升高度 单位米
 #define DISTANCE_TO_ROUND (1.0f / ROUNDDISTANCE) //路程转换为圈数
 #define TOTAL_LENGTH 0.15f //力臂总长(转轴到轮心) 单位米
+
+#define EXTRA 0 //角度余量 用于压紧
+
+#define LIMIT 0.005 //初始化或调零要求的机器人的速度阈值
 
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离
@@ -81,6 +85,8 @@ typedef enum{
 
 extern Zero_State zero3_state;
 extern Zero_State zero4_state;
+
+extern int IfPlotSending;
 
 extern Class_Serialplot serialplot;
 extern Class_Motor_C620 motor; 
@@ -161,6 +167,8 @@ void Structure_Init(float Radius , float Extra);
 float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor); //目标张角转换为螺母圈数
 
 float Angle_Caculate_From_Radius(float Radius); //管道半径转换为张开角度
+
+void Caculate_Total_Distance();//统计机器人走的总路程
 
 
 #endif

@@ -69,6 +69,8 @@ Class_Motor_C610 motor3;
 Class_Motor_C610 motor4;
 Class_Serialplot serialplot;
 
+int IfPlotSending;
+
 float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed, //机器人距离与速度控制
 
       Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed, //旋转测距速度控制
@@ -114,7 +116,7 @@ void CAN_Motor_Call_Back(Struct_CAN_Rx_Buffer *Rx_Buffer)
  {
      Robot_Test_Serialplot_Call_Back_Configuration(Buffer , Length, serialplot, motor, motor2, motor3 ,&Robot_Target_Speed,&Robot_Target_Distance,&Rotate_Target_Speed,&Rotate_Target_Angle);
 
- } //串口调试 不用时和下面一起注释
+ } 
 
 /* USER CODE END 0 */
 
@@ -167,8 +169,12 @@ int main(void)
   Set_M2006_Omega_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);
   Set_M2006_Angle_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);//PID参数设置
 
+  motor.TotalDistance = 0; //累积设0
+
   zero3_state = ZERO_DONE;
   zero4_state = ZERO_DONE; 
+
+  HAL_GPIO_WritePin(GPIOG,GPIO_PIN_13,GPIO_PIN_SET);
 
   //Structure_Init(Tube_Radius , Extra_Angle); //调零与结构自适应 调整PID参数时注释
 

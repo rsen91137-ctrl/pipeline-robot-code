@@ -349,6 +349,8 @@ public:
     void TIM_Alive_PeriodElapsedCallback();
     void TIM_PID_PeriodElapsedCallback();
 
+    float TotalDistance;
+
     //void Stop_M3508();
 
 protected:
