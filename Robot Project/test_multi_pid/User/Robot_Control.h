@@ -129,6 +129,11 @@ void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);
 
 void Motor_Stop_Operation(Motor_Name name);
 
+void Front_Screw_Adjust(float RPM);
+
+void Rear_Screw_Adjust(float RPM);
+
+
 //PID运算
 void Forward_PID_Processing(Class_Motor_C620 &motor);
 

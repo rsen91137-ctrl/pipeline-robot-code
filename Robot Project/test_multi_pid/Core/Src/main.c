@@ -166,13 +166,13 @@ int main(void)
   Set_M3508_Omega_PID_Parameters(1000.0f, 1330.0f, 0.0f, 20000.0f, motor); 
   Set_M3508_Angle_PID_Parameters(0.3f, 0.0f, 0.6f, motor); 
   Set_GM6020_Omega_PID_Parameters(80.0f, 100.0f, 0.0f, 2000.0f, motor2);
-  Set_M2006_Omega_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);
-  Set_M2006_Angle_PID_Parameters(0.0f , 0.0f , 0.0f , 0.0f , motor3 , motor4);//PID参数设置
+  Set_M2006_Omega_PID_Parameters(900.0f , 1000.0f , 0.0f , 20000.0f , motor3 , motor4);
+  Set_M2006_Angle_PID_Parameters(3.0f , 0.0f , 0.2f , 0.0f , motor3 , motor4);//PID参数设置
 
   motor.TotalDistance = 0; //累积设0
 
-  zero3_state = ZERO_DONE;
-  zero4_state = ZERO_DONE; 
+  // zero3_state = ZERO_DONE;
+  // zero4_state = ZERO_DONE; 
 
   HAL_GPIO_WritePin(GPIOG,GPIO_PIN_13,GPIO_PIN_SET);
 

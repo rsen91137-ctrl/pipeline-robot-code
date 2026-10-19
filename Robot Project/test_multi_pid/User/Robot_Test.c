@@ -65,11 +65,13 @@ void Dictionary_Define(Class_Serialplot &serialplot){
 
     //断连检测
     "Online",
+    "FrontIncreaseForce",
+    "RearIncreaseForce",
 
 
 };
 
-    serialplot.Init(&huart2, 40, (char **)Variable_Assignment_List);
+    serialplot.Init(&huart2, 42, (char **)Variable_Assignment_List);
     
 
 }
@@ -318,7 +320,7 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(36):{
 
-            if(motor.Get_Now_Omega() < LIMIT){
+            if(motor.Get_Now_Omega() < LIMIT && motor.Get_Now_Omega() > -LIMIT){
 
                 Operate_Motor_Set_Zero(motor3);
                 Operate_Motor_Set_Zero(motor4);
@@ -341,10 +343,23 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(39):{
 
-
+            
 
         }
         break;
+        case(40):{
+
+            Front_Screw_Adjust(serialplot.Get_Variable_Value());
+
+        }
+        break;
+        case(41):{
+
+            Rear_Screw_Adjust(serialplot.Get_Variable_Value());
+
+        }
+        break;
+        
     }
 
 }
@@ -377,7 +392,7 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
     //motor4_Target_Revolutions = motor4_Target_Delta_Revolutions; // 显示本次要旋转的圈数
     //motor4_Now_Revolutions = (motor4.Get_Now_Angle() - motor4_Start_Angle) / (2 * PI); // 从指令起点累计的当前圈数
 
-    serialplot.Set_Data(5,&Robot_Target_Speed, &Robot_Now_Speed, &motor.TotalDistance , &Rotate_Target_Speed, &Rotate_Now_Speed /*&motor3_Target_Omega , &motor3_Now_Omega ,&motor3_Target_Revolutions, &motor3_Now_Revolutions ,&motor4_Target_Revolutions, &motor4_Now_Revolution*/ );
+    serialplot.Set_Data(5,&Robot_Target_Speed, &Robot_Now_Speed, &motor.TotalDistance , &Rotate_Target_Speed, &Rotate_Now_Speed /*, &Robot_Target_Distance, &motor3_Target_Omega , &motor3_Now_Omega ,&motor3_Target_Revolutions, &motor3_Now_Revolutions*/ /*,&motor4_Target_Revolutions, motor4_Now_Revolution*/ );
     serialplot.TIM_Write_PeriodElapsedCallback();
 
     TIM_UART_PeriodElapsedCallback();

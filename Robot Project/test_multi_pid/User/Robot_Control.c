@@ -29,12 +29,12 @@ void Robot_Control_Init(Class_Motor_C620 &motor, Class_Motor_GM6020 &motor2 , Cl
 
     motor3.PID_Angle.Init(0.0f, 0.0f, 0.0f, 0.0f, 15.0f * PI, 15.0f * PI);
     motor3.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 4000.0f);
-    motor3.Init(&hcan1, CAN_Motor_ID_0x202, Control_Method_ANGLE,36.0f);
+    motor3.Init(&hcan1, CAN_Motor_ID_0x202, Control_Method_OMEGA,36.0f);
     //初始化为角度环
     
     motor4.PID_Angle.Init(0.0f, 0.0f, 0.0f, 0.0f, 15.0f * PI, 15.0f * PI);
     motor4.PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 4000.0f);
-    motor4.Init(&hcan1, CAN_Motor_ID_0x203, Control_Method_ANGLE,36.0f);
+    motor4.Init(&hcan1, CAN_Motor_ID_0x203, Control_Method_OMEGA,36.0f);
     //初始化为角度环
 
 }
@@ -273,6 +273,29 @@ void Motor_Stop_Operation(Motor_Name name){
     }
 
  }
+
+
+/**
+ * @brief 前端丝杆调整 输入单位RPM
+ * 
+ */
+void Front_Screw_Adjust(float RPM){
+
+    motor3.Set_Target_Omega(MOTOR3_DERECTION_SYMBOL * RPM * RPM_TO_RADS);
+
+}
+
+/**
+ * @brief 后端丝杆调整
+ * 
+ */
+void Rear_Screw_Adjust(float RPM){
+
+    motor4.Set_Target_Omega(MOTOR4_DERECTION_SYMBOL * RPM * RPM_TO_RADS);
+
+}
+ 
+
 
 /**
  * @brief 驱动电机M3508的PID计算以及传回电机
@@ -728,7 +751,7 @@ void Caculate_Total_Distance(){
 
     float TICK = 0.001f;
 
-    if(Get_Robot_Target_Speed() > 1e-6 | Get_Robot_Target_Speed() < 1e-6){
+    if(motor.Get_Target_Omega() > 1e-5 | motor.Get_Target_Omega() < 1e-5){
     
     motor.TotalDistance += Get_Robot_Now_Speed(motor,MOTOR_WHEEL_OMEGA_RATIO,RADIUS) * TICK;
 
