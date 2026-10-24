@@ -60,6 +60,11 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+/* A 板板载 TF 卡槽的机械插卡检测：插卡接地，未插卡由内部上拉保持高电平。
+ * 本阶段只读取电平，不启用 EXTI；PE15 与 UART8 的 PE0/PE1 相互独立。 */
+#define SD_DETECT_Pin GPIO_PIN_15
+#define SD_DETECT_GPIO_Port GPIOE
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

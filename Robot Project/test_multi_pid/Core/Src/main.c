@@ -35,6 +35,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "sdio.h"
+#include "fatfs.h"
+#include "sd_card_test.h"
 
 
 /* USER CODE END Includes */
@@ -144,6 +147,22 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
+#if SD_CARD_TEST_MODE    //SD_CARD_TEST_MODE=1 时，进入独立 SD 卡读写测试模式，PH2~PH5 保持低电平，不执行后续机器人控制代码。0 时，正常运行机器人控制代码。
+  /* 第三阶段独立测试：只初始化文件测试所需资源，PH2~PH5 保持低电平，
+   * 不执行后面的 CAN、串口、电机控制和 24V 输出使能。
+   * 测试成功或失败后都停在结果显示循环，不会继续进入机器人运行代码。
+   * 要恢复机器人控制，请在 sd_card_test.h 中将 SD_CARD_TEST_MODE 改为 0。 */
+  MX_GPIO_Init();
+  MX_SDIO_SD_Init();
+  MX_FATFS_Init();
+  SD_Card_Test_Run_Storage_And_Read_Back();
+  while (1)
+  {
+      SD_Card_Test_Show_Result();
+      HAL_Delay(1);
+  }
+#else
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -154,6 +173,14 @@ int main(void)
   MX_I2C2_Init();
 
   /* USER CODE BEGIN 2 */
+
+  /* 第一阶段：准备 SDIO 句柄并注册 FatFs 磁盘驱动。
+   * 此处不挂载、不格式化、不打开文件，也不等待 SD 卡，避免无卡影响电机启动。
+   * 后续挂载时，FatFs 的 disk_initialize 才调用 BSP_SD_Init 完成实际卡初始化。
+   * 激光采样周期为 1.5 ms（约 667 次/秒）：后续应缓存并批量写入，
+   * 接收中断只保存数据快照，不能在中断中直接调用文件或阻塞 SD 接口。 */
+  MX_SDIO_SD_Init();
+  MX_FATFS_Init();
     
   Dictionary_Define(serialplot);
   UART_Init(&huart2, UART_Serialplot_Call_Back, SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH); //串口绘图
@@ -204,6 +231,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     }
+#endif /* SD_CARD_TEST_MODE */
   /* USER CODE END 3 */
 }
 
@@ -231,7 +259,11 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLM = 6;
   RCC_OscInitStruct.PLL.PLLN = 180;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  /* VCO=12/6*180=360 MHz；Q=8 为 SDIO 提供 45 MHz（必须不超过 48 MHz）。
+   * SYSCLK 仍为 180 MHz，APB1/APB2 仍为 45/90 MHz，保留现有 CAN 与串口时序。
+   * HAL 初始化分频 118 得 375 kHz；传输分频 0 得 22.5 MHz。
+   * 此方案未提供 USB 所需的精确 48 MHz，未来启用 USB 时需要重新规划。 */
+  RCC_OscInitStruct.PLL.PLLQ = 8;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();

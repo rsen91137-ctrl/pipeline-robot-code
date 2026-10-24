@@ -27,7 +27,8 @@
 ;   <o> Stack Size (in Bytes) <0x0-0xFFFFFFFF:8>
 ; </h>
 
-Stack_Size		EQU     0x400
+; SD/FatFs 移植：为文件函数嵌套调用与中断现场预留 4 KiB 栈空间。
+Stack_Size		EQU     0x1000
 
                 AREA    STACK, NOINIT, READWRITE, ALIGN=3
 Stack_Mem       SPACE   Stack_Size

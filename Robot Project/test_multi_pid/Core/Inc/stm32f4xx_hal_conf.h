@@ -59,7 +59,8 @@
 /* #define HAL_RNG_MODULE_ENABLED */
 /* #define HAL_RTC_MODULE_ENABLED */
 /* #define HAL_SAI_MODULE_ENABLED */
-/* #define HAL_SD_MODULE_ENABLED */
+/* 启用当前工程自带的 SD HAL，保持 HAL 1.8.1，不混入官方示例的旧版 HAL。 */
+#define HAL_SD_MODULE_ENABLED
 /* #define HAL_MMC_MODULE_ENABLED */
 /* #define HAL_SPI_MODULE_ENABLED */
 /* #define HAL_TIM_MODULE_ENABLED */
