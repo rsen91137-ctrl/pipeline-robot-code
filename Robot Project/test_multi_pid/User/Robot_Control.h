@@ -53,6 +53,8 @@
 
 #define LIMIT 0.005 //初始化或调零要求的机器人的速度阈值
 
+#define ROTATION_DIS_MEASURE_DATA_MAX_LENGTH 20
+
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离
 extern float Robot_Move_Start_Angle;             // 记录每次移动距离ta指令发出后的起始角度，便于计算当前距离
@@ -133,6 +135,9 @@ void Front_Screw_Adjust(float RPM);
 
 void Rear_Screw_Adjust(float RPM);
 
+void Start_Synchornize(void); //测距部分与里程数开始同步
+
+void Stop_Synchornize(void); //测距部分与里程数停止同步
 
 //PID运算
 void Forward_PID_Processing(Class_Motor_C620 &motor);

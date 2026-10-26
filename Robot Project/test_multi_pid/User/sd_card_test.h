@@ -12,7 +12,7 @@
 /* 工程可通过 -DSD_CARD_TEST_MODE=0 关闭测试；默认使用独立存储测试模式。
  * 主程序、GPIO 和中断文件也应使用同一宏隔离正常的机器人控制逻辑。 */
 #ifndef SD_CARD_TEST_MODE
-#define SD_CARD_TEST_MODE 1
+#define SD_CARD_TEST_MODE 0
 #endif
 
 #if (SD_CARD_TEST_MODE != 0) && (SD_CARD_TEST_MODE != 1)

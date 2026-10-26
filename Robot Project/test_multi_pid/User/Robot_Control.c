@@ -294,6 +294,34 @@ void Rear_Screw_Adjust(float RPM){
     motor4.Set_Target_Omega(MOTOR4_DERECTION_SYMBOL * RPM * RPM_TO_RADS);
 
 }
+
+/**
+ * @brief 使能测距部分与机器人里程数同步
+ * 
+ */
+
+
+void Start_Synchornize(void){
+
+    static uint8_t command[] = "START=1#"; //L432KC字典定义
+
+    UART_Send_Data(&huart6, command, sizeof(command) - 1);
+
+}
+
+/**
+ * @brief 失能测距部分与机器人里程数同步
+ * 
+ */
+
+void Stop_Synchornize(void){
+
+    static uint8_t command[] = "STOP=1#"; //L432KC字典定义
+
+    UART_Send_Data(&huart6, command, sizeof(command) - 1);
+
+
+}
  
 
 

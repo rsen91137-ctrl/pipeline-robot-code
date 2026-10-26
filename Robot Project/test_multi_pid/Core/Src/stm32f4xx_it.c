@@ -61,6 +61,9 @@ extern CAN_HandleTypeDef hcan1;
 extern DMA_HandleTypeDef hdma_usart2_rx;
 extern DMA_HandleTypeDef hdma_usart2_tx;
 extern UART_HandleTypeDef huart2;
+extern DMA_HandleTypeDef hdma_usart6_rx;
+extern DMA_HandleTypeDef hdma_usart6_tx;
+extern UART_HandleTypeDef huart6;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -275,6 +278,30 @@ void USART2_IRQHandler(void)
   /* USER CODE BEGIN USART2_IRQn 1 */
 
   /* USER CODE END USART2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART6 RX DMA interrupt.
+  */
+void DMA2_Stream1_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_usart6_rx);
+}
+
+/**
+  * @brief This function handles USART6 TX DMA interrupt.
+  */
+void DMA2_Stream6_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_usart6_tx);
+}
+
+/**
+  * @brief This function handles USART6 global interrupt (including IDLE).
+  */
+void USART6_IRQHandler(void)
+{
+  HAL_UART_IRQHandler(&huart6);
 }
 
 /* USER CODE BEGIN 1 */

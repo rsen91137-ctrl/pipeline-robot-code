@@ -100,7 +100,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 
 /**
- * @brief CAN报文回调函数
+ * @brief 电机反馈报文程序
  *
  * @param Rx_Buffer CAN接收的信息结构体
  */
@@ -110,16 +110,30 @@ void CAN_Motor_Call_Back(Struct_CAN_Rx_Buffer *Rx_Buffer)
 }
 
 /**
- * @brief 串口接收回调函数
+ * @brief 机器人数据返回电脑回调函数
  *
  * @param huart UART编号
  * @param Size 长度
  */
- void UART_Serialplot_Call_Back(uint8_t *Buffer, uint16_t Length)
+
+void UART_Serialplot_Call_Back(uint8_t *Buffer, uint16_t Length)
  {
      Robot_Test_Serialplot_Call_Back_Configuration(Buffer , Length, serialplot, motor, motor2, motor3 ,&Robot_Target_Speed,&Robot_Target_Distance,&Rotate_Target_Speed,&Rotate_Target_Angle);
 
  } 
+
+/**
+ * @brief 测距部分返回数据处理代码
+ * 
+ * @param Buffer 
+ * @param Length 
+ */
+
+void R_D_M_Data_Processing(uint8_t *Buffer, uint16_t Length){
+
+
+
+}
 
 /* USER CODE END 0 */
 
@@ -127,6 +141,8 @@ void CAN_Motor_Call_Back(Struct_CAN_Rx_Buffer *Rx_Buffer)
   * @brief  The application entry point.
   * @retval int
   */
+
+
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -170,6 +186,7 @@ int main(void)
   MX_DMA_Init();
   MX_CAN1_Init();
   MX_USART2_UART_Init();
+  MX_USART6_UART_Init();
   MX_I2C2_Init();
 
   /* USER CODE BEGIN 2 */
@@ -183,7 +200,8 @@ int main(void)
   MX_FATFS_Init();
     
   Dictionary_Define(serialplot);
-  UART_Init(&huart2, UART_Serialplot_Call_Back, SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH); //串口绘图
+  UART_Init(&huart2, UART_Serialplot_Call_Back, SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH); //机器人控制串口
+  UART_Init(&huart6, R_D_M_Data_Processing, ROTATION_DIS_MEASURE_DATA_MAX_LENGTH); //两块开发板沟通的通信模块连接
 
   BSP_Init(BSP_DC24_LU_ON | BSP_DC24_LD_ON | BSP_DC24_RU_ON | BSP_DC24_RD_ON);
   CAN_Init(&hcan1, CAN_Motor_Call_Back);//24V接口和CAN外设初始化
@@ -197,6 +215,8 @@ int main(void)
   Set_M2006_Angle_PID_Parameters(3.0f , 0.0f , 0.2f , 0.0f , motor3 , motor4);//PID参数设置
 
   motor.TotalDistance = 0; //累积设0
+  IfPlotSending = 1;
+  Start_Synchornize(); //开机默认同步状态
 
   // zero3_state = ZERO_DONE;
   // zero4_state = ZERO_DONE; 

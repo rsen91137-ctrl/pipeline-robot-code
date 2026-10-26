@@ -68,10 +68,13 @@ void Dictionary_Define(Class_Serialplot &serialplot){
     "FrontIncreaseForce",
     "RearIncreaseForce",
 
+    //使能与失能里程测距同步
+    "StartSynchronize",
+    "StopSynchronize",
 
 };
 
-    serialplot.Init(&huart2, 42, (char **)Variable_Assignment_List);
+    serialplot.Init(&huart2, 44, (char **)Variable_Assignment_List);
     
 
 }
@@ -359,7 +362,19 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
 
         }
         break;
-        
+        case(42):{
+
+            Start_Synchornize(); //开始测距同步
+
+        }
+        break;
+        case(43):{
+
+            Stop_Synchornize(); //停止测距同步
+
+        }
+        break;
+
     }
 
 }
