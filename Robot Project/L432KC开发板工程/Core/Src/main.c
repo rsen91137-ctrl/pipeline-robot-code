@@ -24,6 +24,7 @@
 #include "usart.h"
 #include "gpio.h"
 #include "UART_config.h"
+#include "Dic_config.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -69,8 +70,9 @@ void SystemClock_Config(void);
  * @param Length 
  */
 
-void Command_Processing_Callback_Function(uint8_t* Buffer , uint16_t Length){
+void Command_Processing_Callback_Function(uint8_t* Buffer , uint16_t Length){ //UART回调函数
 
+  Command_Processing(Length);
 
 }
 
@@ -135,7 +137,7 @@ int main(void)
    
    */
 
-  UART_Init(&huart1, Command_Processing_Callback_Function, COMMAND_MAX_SIZE); //UART接收初始化
+  UART_Init(&huart1, Command_Processing_Callback_Function, COMMAND_MAX_SIZE); //UART接收初始化 定义数据处理函数
 
   /* USER CODE END 2 */
 
@@ -144,7 +146,9 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    // uint8_t data = '0';
 
+    // UART_Send_Data(&huart1, &data, 1);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

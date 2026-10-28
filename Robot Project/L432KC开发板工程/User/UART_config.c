@@ -1,6 +1,8 @@
 #include "UART_config.h"
 
-Struct_UART_Manage_Object USART1_Manage_Object= {0};
+static Struct_UART_Manage_Object USART1_Manage_Stroage = {0}; //防止空指针
+
+Struct_UART_Manage_Object *USART1_Manage_Object = &USART1_Manage_Stroage; //UART1的通讯处理结构体
 
 /**
  * @brief UART初始化函数
@@ -14,10 +16,10 @@ void UART_Init(UART_HandleTypeDef *huart, UART_Callback_Function Callback_Functi
 
     if(huart->Instance == USART1){
 
-        USART1_Manage_Object.UART_Handler = huart;
-        USART1_Manage_Object.Callback_Function = Callback_Function;
-        USART1_Manage_Object.Rx_Buffer_Length = Length;
-        HAL_UARTEx_ReceiveToIdle_DMA(USART1_Manage_Object.UART_Handler, USART1_Manage_Object.Rx_Buffer, USART1_Manage_Object.Rx_Buffer_Length); //开启UART空闲中断和DMA接收
+        USART1_Manage_Object->UART_Handler = huart;
+        USART1_Manage_Object->Callback_Function = Callback_Function;
+        USART1_Manage_Object->Rx_Buffer_Length = Length;
+        HAL_UARTEx_ReceiveToIdle_DMA(USART1_Manage_Object->UART_Handler, USART1_Manage_Object->Rx_Buffer, USART1_Manage_Object->Rx_Buffer_Length); //开启UART空闲中断和DMA接收
 
     }
 
@@ -32,8 +34,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 
     if(huart->Instance == USART1){
 
-        USART1_Manage_Object.Callback_Function(USART1_Manage_Object.Rx_Buffer, Size);
-        HAL_UARTEx_ReceiveToIdle_DMA(USART1_Manage_Object.UART_Handler, USART1_Manage_Object.Rx_Buffer, USART1_Manage_Object.Rx_Buffer_Length); //重新开启UART空闲中断和DMA接收
+        USART1_Manage_Object->Callback_Function(USART1_Manage_Object->Rx_Buffer, Size);
+        HAL_UARTEx_ReceiveToIdle_DMA(USART1_Manage_Object->UART_Handler, USART1_Manage_Object->Rx_Buffer, USART1_Manage_Object->Rx_Buffer_Length); //重新开启UART空闲中断和DMA接收
 
     }
 

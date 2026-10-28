@@ -196,10 +196,6 @@ void SysTick_Handler(void)
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
 
-#if !SD_CARD_TEST_MODE
-  Caculate_Total_Distance(); //统计机器人走的总距离
-#endif /* SD 测试仍保留 HAL_IncTick，为卡驱动超时和性能计时提供节拍。 */
-
   /* USER CODE END SysTick_IRQn 1 */
 }
 

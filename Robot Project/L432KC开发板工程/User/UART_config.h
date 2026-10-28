@@ -19,9 +19,10 @@ typedef struct //UART信息处理结构体
     
 }Struct_UART_Manage_Object;
 
+
 extern UART_HandleTypeDef huart1;
 
-extern Struct_UART_Manage_Object USART1_Manage_Object; //UART1的通讯处理结构体
+extern Struct_UART_Manage_Object *USART1_Manage_Object; //UART1的通讯处理结构体
 
 
 void UART_Init(UART_HandleTypeDef *huart, UART_Callback_Function Callback_Function, uint16_t Length);//UART初始化函数

@@ -178,7 +178,7 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor); //目标张�
 
 float Angle_Caculate_From_Radius(float Radius); //管道半径转换为张开角度
 
-void Caculate_Total_Distance();//统计机器人走的总路程
+//void Caculate_Total_Distance();//统计机器人走的总路程
 
 
 #endif

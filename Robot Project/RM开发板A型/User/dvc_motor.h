@@ -349,7 +349,7 @@ public:
     void TIM_Alive_PeriodElapsedCallback();
     void TIM_PID_PeriodElapsedCallback();
 
-    float TotalDistance;
+    float TotalDistance = 0.0f ; //机器人行程 单位m
 
     //void Stop_M3508();
 

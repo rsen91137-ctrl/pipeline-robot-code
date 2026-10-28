@@ -1025,6 +1025,8 @@ void Class_Motor_C620::CAN_RxCpltCallback(uint8_t *Rx_Data)
     }
     Total_Encoder = Total_Round * Encoder_Num_Per_Round + Rx_Encoder;
 
+    TotalDistance = Total_Encoder / Gearbox_Rate / 8192.0f / (MOTOR_WHEEL_OMEGA_RATIO) * 2.0f * PI * RADIUS;
+
     Now_Angle = (float)Total_Encoder / (float)Encoder_Num_Per_Round * 2.0f * PI / Gearbox_Rate;
     Now_Omega = (float)Rx_Omega * RPM_TO_RADS / Gearbox_Rate;
     Now_Torque = Rx_Torque;

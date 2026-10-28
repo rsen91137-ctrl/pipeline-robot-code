@@ -771,21 +771,21 @@ float Angle_Caculate_From_Radius(float Radius){
 }
 
 /**
- * @brief 统计机器人总路程函数 放在systick中
+ * @brief 统计机器人总路程函数 放在systick中 速度积分
  * 
  */
 
-void Caculate_Total_Distance(){
+// void Caculate_Total_Distance(){
 
-    float TICK = 0.001f;
+//     float TICK = 0.001f;
 
-    if(motor.Get_Target_Omega() > 1e-5 | motor.Get_Target_Omega() < 1e-5){
+//     if(motor.Get_Target_Omega() > 1e-5 | motor.Get_Target_Omega() < 1e-5){
     
-    motor.TotalDistance += Get_Robot_Now_Speed(motor,MOTOR_WHEEL_OMEGA_RATIO,RADIUS) * TICK;
+//     motor.TotalDistance += Get_Robot_Now_Speed(motor,MOTOR_WHEEL_OMEGA_RATIO,RADIUS) * TICK;
 
-    }
+//     }
 
-}
+// }
 
 
 
