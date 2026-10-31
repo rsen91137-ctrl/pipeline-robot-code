@@ -48,6 +48,7 @@ int Dictionary_Process_Index(int size){
 
     }
 
+    return -1; //未找到匹配的指令
 }
 
 /**
