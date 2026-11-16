@@ -4,6 +4,8 @@ static Struct_UART_Manage_Object USART1_Manage_Stroage = {0}; //防止空指针
 
 Struct_UART_Manage_Object *USART1_Manage_Object = &USART1_Manage_Stroage; //UART1的通讯处理结构体
 
+int ifsend = 0;
+
 /**
  * @brief UART初始化函数
  * 

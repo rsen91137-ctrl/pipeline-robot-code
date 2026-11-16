@@ -3,6 +3,7 @@
 
 #include "string.h"
 #include "stdlib.h"
+#include "tim.h"
 #include "UART_config.h"
 
 #define RX_VARIABLE_ASSIGNMENT_MAX_LENGTH 100

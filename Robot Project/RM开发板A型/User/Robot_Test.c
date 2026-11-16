@@ -68,13 +68,17 @@ void Dictionary_Define(Class_Serialplot &serialplot){
     "FrontIncreaseForce",
     "RearIncreaseForce",
 
-    //使能与失能里程测距同步
+    //使能与失能L432KC测距
     "StartSynchronize",
     "StopSynchronize",
 
+    //使能与使能实时建模 由于波特率限制 同时会关闭其他数据传回
+    "StartSynchroDataSending",
+    "StopSynchroDataSending",
+
 };
 
-    serialplot.Init(&huart2, 44, (char **)Variable_Assignment_List);
+    serialplot.Init(&huart2, 46, (char **)Variable_Assignment_List);
     
 
 }
@@ -346,7 +350,7 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(39):{
 
-            
+            Online = 1;//如果没有断连 每5秒自动调整一次到1
 
         }
         break;
@@ -364,17 +368,31 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(42):{
 
-            Start_Synchornize(); //开始测距同步
+            Start_Synchornize(); //开始测距
+            IfPlotSending = 0;
 
         }
         break;
         case(43):{
 
-            Stop_Synchornize(); //停止测距同步
+            Stop_Synchornize(); //停止测距
 
         }
         break;
+        case(44):{
 
+            IfsychroDataSending = 1; //开启实时建模
+            IfPlotSending = 0;
+
+        }
+        break;
+        case(45):{
+
+            IfsychroDataSending = 0; //关闭实时建模
+            IfPlotSending = 1;
+
+        }
+        break;
     }
 
 }
@@ -386,7 +404,7 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
 
 void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4 , float Wheel_Omega_Ratio , float Wheel_Radius){
 
-    if(IfPlotSending){
+    if(IfPlotSending && !IfsychroDataSending){
 
     float Robot_Target_Speed, Robot_Now_Speed,Rotate_Target_Speed, Rotate_Now_Speed, Robot_Target_Distance, Robot_Now_Distance, motor3_Target_Omega , motor3_Now_Omega ,motor3_Target_Revolutions, motor3_Now_Revolutions/* motor4_Target_Revolutions, motor4_Now_Revolutions*/;
 
@@ -413,5 +431,12 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
     TIM_UART_PeriodElapsedCallback();
 
     }
+    else if(IfsychroDataSending && !IfPlotSending){
+
+        //传回当前时刻的机器人里程坐标,电机角度,以及测距仪数值 方便建立三维极坐标系
+
+    }
+
+        
 
 }

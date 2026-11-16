@@ -24,6 +24,8 @@ extern UART_HandleTypeDef huart1;
 
 extern Struct_UART_Manage_Object *USART1_Manage_Object; //UART1的通讯处理结构体
 
+extern int ifsend;
+
 
 void UART_Init(UART_HandleTypeDef *huart, UART_Callback_Function Callback_Function, uint16_t Length);//UART初始化函数
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size); // HAL库中断时处理信息函数

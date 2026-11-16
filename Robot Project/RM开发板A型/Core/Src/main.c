@@ -72,7 +72,7 @@ Class_Motor_C610 motor3;
 Class_Motor_C610 motor4;
 Class_Serialplot serialplot;
 
-int IfPlotSending;
+int IfPlotSending , IfsychroDataSending; //数据传回标志位
 
 float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed, //机器人距离与速度控制
 
@@ -82,7 +82,15 @@ float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_S
       
       Tube_Radius , Extra_Angle; //管道半径与角度余量
 
-uint32_t Counter = 0;
+/* Latest received laser distance in mm; -1 means invalid or not yet received. */
+
+volatile float Rotation_Measured_Distance_mm; //L432KC开发板测距返回数据
+
+uint32_t Counter;
+
+uint8_t Online; //在线标志位
+
+uint8_t OfflineFlag;
 
 const char *msg;
 
@@ -125,14 +133,85 @@ void UART_Serialplot_Call_Back(uint8_t *Buffer, uint16_t Length)
 /**
  * @brief 测距部分返回数据处理代码
  * 
- * @param Buffer 
+ * @param Rotation_Measured_Distance_mm 测距数据存入该变量
  * @param Length 
  */
 
-void R_D_M_Data_Processing(uint8_t *Buffer, uint16_t Length){
+void R_D_M_Data_Processing(uint8_t *Buffer, uint16_t Length)
+{
+    /* Ignore DMA half-transfer events; IDLE/TC returns the complete prefix. */
+    static char line[ROTATION_DIS_MEASURE_DATA_MAX_LENGTH];
+    static uint16_t line_length = 0;
+    static uint8_t discard_line = 0;
+    static uint8_t uart2_tx_buffer[ROTATION_DIS_MEASURE_DATA_MAX_LENGTH + 1];
+    uint8_t pending_frame[ROTATION_DIS_MEASURE_DATA_MAX_LENGTH + 1];
+    uint16_t pending_length = 0;
+    uint16_t i;
 
+    if (Buffer == NULL || huart6.RxState != HAL_UART_STATE_READY)
+    {
+        return;
+    }
 
+    for (i = 0; i < Length; ++i)
+    {
+        char ch = (char)Buffer[i];
+        if (ch == '\n')
+        {
+            if (!discard_line && line_length > 0 && line[line_length - 1] == '\r')
+            {
+                uint16_t n = line_length - 1;
+                uint8_t valid_frame = 0;
+                if (n == 6 && memcmp(line, "-1.000", 6) == 0)
+                {
+                    Rotation_Measured_Distance_mm = -1.0f;
+                    valid_frame = 1;
+                }
+                else if (n >= 5 && n <= 8 && line[n - 4] == '.')
+                {
+                    uint32_t value = 0;
+                    uint16_t j;
+                    uint8_t valid = 1;
+                    for (j = 0; j < n; ++j)
+                    {
+                        if (j == n - 4) continue;
+                        if (line[j] < '0' || line[j] > '9')
+                        {
+                            valid = 0;
+                            break;
+                        }
+                        value = value * 10U + (uint32_t)(line[j] - '0');
+                    }
+                    if (valid)
+                    {
+                        Rotation_Measured_Distance_mm = (float)value / 1000.0f;
+                        valid_frame = 1;
+                    }
+                }
+                if (valid_frame)
+                {
+                    /* Preserve the latest complete ASCII frame, including CRLF. */
+                    memcpy(pending_frame, line, line_length);
+                    pending_frame[line_length] = '\n';
+                    pending_length = line_length + 1;
+                }
+            }
+            line_length = 0;
+            discard_line = 0;
+        }
+        else if (!discard_line)
+        {
+            if (line_length < sizeof(line)) line[line_length++] = ch;
+            else discard_line = 1;
+        }
+    }
 
+    /* USART2 DMA needs a persistent buffer until transmission completes. */
+    /*if (pending_length != 0 && !IfPlotSending && huart2.gState == HAL_UART_STATE_READY)
+    {
+        memcpy(uart2_tx_buffer, pending_frame, pending_length);
+        UART_Send_Data(&huart2, uart2_tx_buffer, pending_length);
+    }*/
 }
 
 /* USER CODE END 0 */
@@ -223,6 +302,8 @@ int main(void)
 
   HAL_GPIO_WritePin(GPIOG,GPIO_PIN_13,GPIO_PIN_SET);
 
+  Start_Synchornize();
+
   //Structure_Init(Tube_Radius , Extra_Angle); //调零与结构自适应 调整PID参数时注释
 
   /* USER CODE END 2 */
@@ -244,6 +325,8 @@ int main(void)
         Angle_Adjusting_PID_Processing(motor4);
       
         Robot_Test_Serialplot_Plot(serialplot , motor , motor2 , motor3 , motor4 , MOTOR_WHEEL_OMEGA_RATIO , RADIUS);
+
+        Robot_Offline_Detection();
 
         HAL_Delay(0);
     

@@ -787,5 +787,87 @@ float Angle_Caculate_From_Radius(float Radius){
 
 // }
 
+/**
+ * @brief 机器人掉线判定
+ * 
+ */
+
+void Robot_Offline_Detection(void){
+
+        Counter++;
+
+        if(Counter >= 6000 && Online){
+
+          OfflineFlag = 0;
+          Online = 0;
+          Counter = 0;
+
+        }
+        else if(!Online){
+
+          OfflineFlag ++;
+          Counter = 0;
+
+          if(OfflineFlag >= 3){
+
+            OfflineFlag = 0;
+            Handle_Robot_Offline(); //机器人断线处理
+
+          }
+
+        }
+
+}
+
+/**
+ * @brief 机器人掉线处理
+ * 
+ */
+
+void Handle_Robot_Offline(void){
+
+    Robot_Back(); //暂定原路返回
+
+}
+
+/**
+ * @brief 机器人按原来里程返回(仅针对直管)
+ * 
+ */
+
+void Robot_Back(void){
+
+    Motor_Stop_Operation(M3508);
+    
+    motor.Set_Control_Method(Control_Method_ANGLE);
+
+    Robot_Move_Distance_Control(motor.TotalDistance * (-1.0f), MOTOR_WHEEL_OMEGA_RATIO, RADIUS, motor);
+
+}
+
+/**
+ * @brief 机器人控制板复位
+ * 
+ */
+
+void Robot_Control_Panel_Reset(void){
+
+    HAL_NVIC_SystemReset();
+
+}
+
+/**
+ * @brief 机器人打滑处理
+ * 
+ */
+
+void Robot_Control_Deal_Slip(void){
+
+
+
+}
+
+
+
 
 

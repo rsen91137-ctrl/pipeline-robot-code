@@ -1,5 +1,6 @@
 #include "Dic_config.h"
 
+
 /**
  * @brief 字典的定义
  * 
@@ -107,16 +108,17 @@ void Command_Processing(int size){
     {
     case (0):{
 
-        uint8_t Data = '1';
-        UART_Send_Data(&huart1, &Data, 1);
+         HAL_TIM_Base_Start(&htim2);
+         ifsend = 1;
+         HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
 
     }
     break;
 
     case (1):{
 
-        uint8_t Data = '2';
-        UART_Send_Data(&huart1, &Data, 1);
+        HAL_TIM_Base_Stop(&htim2);
+        ifsend = 0;
 
     }
     break;

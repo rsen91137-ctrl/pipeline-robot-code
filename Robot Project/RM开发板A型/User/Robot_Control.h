@@ -88,13 +88,19 @@ typedef enum{
 extern Zero_State zero3_state;
 extern Zero_State zero4_state;
 
-extern int IfPlotSending;
+extern int IfPlotSending , IfsychroDataSending; //数据传回标志位
+
+extern int Counter = 0; //计数器
+extern int Online = 1; //在线标志位
+extern int OfflineFlag = 0; //断线检测次数标志位 大于等于三次则判定为断线
 
 extern Class_Serialplot serialplot;
 extern Class_Motor_C620 motor; 
 extern Class_Motor_GM6020 motor2; 
 extern Class_Motor_C610 motor3;
 extern Class_Motor_C610 motor4;
+
+extern volatile float Rotation_Measured_Distance_mm = -1.0f; //L432KC开发板测距返回数据
 
 
 /**
@@ -157,7 +163,7 @@ float Get_Rotate_Now_Speed(Class_Motor_GM6020 &motor2);
 void CAN_Call_Back_Configuration(Struct_CAN_Rx_Buffer *Rx_Buffer , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3, Class_Motor_C610 &motor4);
 
 
-//调零函数
+//调零函数 由于结构元婴 暂时用不到
 extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin); //按钮触发回调函数
 
 void Motor_Set_Zero(Class_Motor_C610 &motor);//调零执行函数
@@ -178,7 +184,18 @@ float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor); //目标张�
 
 float Angle_Caculate_From_Radius(float Radius); //管道半径转换为张开角度
 
-//void Caculate_Total_Distance();//统计机器人走的总路程
+//void Caculate_Total_Distance(); //统计机器人走的总路程
 
+//机器人掉线判定
+void Robot_Offline_Detection(void);
+
+//机器人断线处理
+void Handle_Robot_Offline(void);
+
+void Robot_Back(void); //按目前的里程进行返程
+
+void Robot_Control_Panel_Reset(void); //机器人控制面板复位
+
+void Robot_Control_Deal_Slip(void); //机器人应对打滑问题
 
 #endif

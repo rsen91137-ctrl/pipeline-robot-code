@@ -25,11 +25,18 @@
 #include "gpio.h"
 #include "UART_config.h"
 #include "Dic_config.h"
+#include "stdio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-volatile uint16_t adc_raw = 0;
+/* USER CODE BEGIN PV */
+
+volatile uint16_t adc_raw = 0;       // DMA 写入的原始值
+volatile uint8_t adc_ready = 0;      // 新数据标志
+volatile float distance = -1.0f;     // 毫米；-1 表示尚无有效结果
+
+/* USER CODE END PV */
 
 /* USER CODE END Includes */
 
@@ -139,6 +146,7 @@ int main(void)
 
   UART_Init(&huart1, Command_Processing_Callback_Function, COMMAND_MAX_SIZE); //UART接收初始化 定义数据处理函数
 
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -147,7 +155,67 @@ int main(void)
   {
     /* USER CODE END WHILE */
     // uint8_t data = '0';
+    /* USER CODE BEGIN WHILE */
+while (1)
+{
+    /* USER CODE END WHILE */
 
+    /* USER CODE BEGIN 3 */
+
+    if(ifsend){ //是否发送
+
+      if (adc_ready)
+      {
+          uint16_t sample;
+          float adc_voltage;
+          float sensor_voltage;
+
+          adc_ready = 0;
+
+        /* 读取本次最新采样值 */
+          sample = adc_raw;
+
+        /* ADC 原始值转换为 PA0 引脚电压 */
+          adc_voltage = (float)sample * 3.3f / 4095.0f;
+
+        /* 恢复 12 kΩ 上臂、18 kΩ 下臂分压前的电压 */
+          sensor_voltage = adc_voltage * (30.0f / 18.0f);
+
+        /*
+         * 传感器报警输出约为 5.2V，
+         * 暂用 5.1V 作初步报警判断。
+         */
+          if (sensor_voltage > 5.1f)
+          {
+            distance = -1.0f;
+          }
+          else
+          {
+            /* HG-C1050：Normal 模式，单位 mm */
+            distance = 65.0f - 6.0f * sensor_voltage;
+          }
+      }
+
+      static char tx_buffer[32];
+
+      if (huart1.gState == HAL_UART_STATE_READY)
+      {
+
+        int len = snprintf(tx_buffer, sizeof(tx_buffer), "%.3f\r\n", (double)distance);
+
+        if (len > 0 && len < (int)sizeof(tx_buffer))
+
+        {
+
+             UART_Send_Data(&huart1, (uint8_t *)tx_buffer, (uint16_t)len);
+
+        }
+    }
+
+    }
+
+}
+/* USER CODE END 3 */
     // UART_Send_Data(&huart1, &data, 1);
     /* USER CODE BEGIN 3 */
   }
@@ -204,6 +272,16 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    if (hadc->Instance == ADC1)
+    {
+        adc_ready = 1;
+    }
+}
+
 
 /* USER CODE END 4 */
 

@@ -45,6 +45,16 @@ void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  GPIO_InitTypeDef LED_GPIO_Init = {0}; //测试用灯
+  LED_GPIO_Init.Pin = GPIO_PIN_3;
+  LED_GPIO_Init.Mode = GPIO_MODE_OUTPUT_PP;
+  LED_GPIO_Init.Pull = GPIO_NOPULL;
+  LED_GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &LED_GPIO_Init);
+
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, GPIO_PIN_RESET);
 
 }
 
