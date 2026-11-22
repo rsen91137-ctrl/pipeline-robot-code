@@ -435,11 +435,11 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
 
         Scan_Sync_Get_Statistics(&Statistics);
 
-        Link_Samples_Per_Second = (float)(Statistics.Samples_Ok - Last_Samples_Ok);
+        Link_Samples_Per_Second = (float)(Statistics.Frames_Ok - Last_Samples_Ok);
         Link_Lost_Per_Second = (float)(Statistics.Lost_Samples - Last_Lost_Samples);
         Link_Checksum_Errors = (float)Statistics.Checksum_Errors;
 
-        Last_Samples_Ok = Statistics.Samples_Ok;
+        Last_Samples_Ok = Statistics.Frames_Ok;
         Last_Lost_Samples = Statistics.Lost_Samples;
         Last_Link_Tick = HAL_GetTick();
 
@@ -461,7 +461,7 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
  *        回传帧格式(小端):
  *          字节0      帧头 0xAC
  *          字节1      本帧测点数 N
- *          之后N×12字节  每个测点: 序号uint32 θ uint16(0~65535为一圈) ρ uint16(微米 0为无效) x float32(米)
+ *          之后N×16字节  每个测点: 序号uint32 θ uint16(0~65535为一圈) ρ1 uint16(微米 0为无效) ρ2 uint16(同ρ1) 保留uint16 x float32(米)
  *          最后1字节  校验 = 前面所有字节求和后按位取反
  *
  *        完整数据应写SD卡 这里的无线回传只用于实时预览

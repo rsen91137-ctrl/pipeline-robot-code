@@ -58,14 +58,14 @@
 
 #endif //已作废部分结束
 
-#define ROTATION_DIS_MEASURE_DATA_MAX_LENGTH 112 //USART6一次最多接收的字节数 为测距帧长度28的整数倍
+#define ROTATION_DIS_MEASURE_DATA_MAX_LENGTH 112 //USART6一次最多接收的字节数 为测距帧长度7的整数倍
 
 #define OFFLINE_TIMEOUT_MS 15000U //上位机心跳超时时间 上位机每5秒发一次Online 连续丢3次判定为断线
 #define PLOT_PERIOD_MS 20U //串口绘图发送间隔 一帧49字节在57600波特率下要8.5ms 不能每个周期都发
 
 #define SCAN_UPLINK_FRAME_HEADER 0xAC //测点回传帧头
-#define SCAN_UPLINK_RECORDS_PER_FRAME 16 //每帧回传的测点数
-#define SCAN_UPLINK_DECIMATION 3 //回传抽稀 每3个测点回传1个 57600波特率传不完全部测点
+#define SCAN_UPLINK_RECORDS_PER_FRAME 12 //每帧回传的测点数 12×16+3=195字节 不能超过串口发送缓冲区256字节
+#define SCAN_UPLINK_DECIMATION 4 //回传抽稀 每4个测点回传1个 57600波特率每秒约5700字节 传不完全部测点
 
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离

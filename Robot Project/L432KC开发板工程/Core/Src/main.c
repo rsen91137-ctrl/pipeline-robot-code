@@ -32,16 +32,10 @@
 
 /* USER CODE BEGIN PV */
 
-volatile uint16_t adc_raw = 0;       // DMA 写入的原始值
-volatile uint16_t sample_seq = 0;    // 采样序号 每次采样加1 主控靠它还原采样时刻、发现丢点
-
-static uint16_t build_samples[SCAN_SAMPLES_PER_FRAME];          // 采样中断里正在攒的一帧
-static uint16_t build_seq0 = 0;                                  // 这一帧第一个采样的序号
-static uint8_t build_count = 0;
-
-volatile uint16_t ready_samples[SCAN_SAMPLES_PER_FRAME];        // 攒满的一帧 等主循环发送
-volatile uint16_t ready_seq0 = 0;
-volatile uint8_t frame_ready = 0;                                // 有一帧等待发送
+volatile uint16_t adc_raw[2] = {0, 0};    // DMA 写入的原始值 [0]传感器1 [1]传感器2
+volatile uint16_t sample_raw[2] = {0, 0}; // 采样完成中断里锁存的本次采样值
+volatile uint16_t sample_seq = 0;         // 采样序号 每次采样加1 主控靠它发现丢点
+volatile uint8_t adc_ready = 0;           // 新数据标志
 
 /* USER CODE END PV */
 
@@ -136,7 +130,7 @@ int main(void)
 
   }
 
-  if (HAL_ADC_Start_DMA(&hadc1,(uint32_t *)&adc_raw, 1) != HAL_OK)
+  if (HAL_ADC_Start_DMA(&hadc1,(uint32_t *)adc_raw, SCAN_SENSOR_COUNT) != HAL_OK)
   {
 
     Error_Handler();
@@ -147,7 +141,13 @@ int main(void)
    
   开始以 1000 Hz 采样 : HAL_TIM_Base_Start(&htim2);
   停止产生采样触发 : HAL_TIM_Base_Stop(&htim2);
-  读取最新 ADC 原始值 : uint16_t raw = adc_raw;
+  读取最新 ADC 原始值 : uint16_t raw = adc_raw[0];
+
+  接第二个传感器时(SCAN_SENSOR_COUNT改为2) 需要先在CubeMX里改ADC1:
+    1. 再勾选一个输入通道(第二个传感器接的引脚)
+    2. Number Of Conversion 改为 2  Rank 1 选传感器1的通道  Rank 2 选传感器2的通道
+    3. Scan Conversion Mode 会自动变为 Enabled  其余保持不变(仍由TIM2触发 DMA循环模式)
+  这样每次TIM2触发 两个通道依次转换 DMA把结果写进adc_raw[0]和adc_raw[1] 转换完成中断在两个都转完后进一次
    
    */
 
@@ -168,45 +168,37 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
     /*
-     * 采样中断每攒满16个采样 这里打成一帧发出去 帧格式见UART_config.h
-     * 发ADC原始值 换算成距离放到主控做
-     * 28字节发完约2.4ms 远小于16ms的帧间隔
-     * 如果上一帧还没发完下一帧就攒满了 旧的会被覆盖 主控从序号跳变能看出来
+     * 每个采样发一帧 7字节 带采样序号和两个传感器的ADC原始值 帧格式见UART_config.h
+     * 换算成距离放到主控做
+     * 7字节发完约0.61ms 赶得上1ms一次的采样
+     * 如果上一帧还没发完 这个采样留到下一圈循环 来不及就被新采样覆盖 主控从序号跳变能看出来
      */
-    if (ifsend && frame_ready && huart1.gState == HAL_UART_STATE_READY)
+    if (ifsend && adc_ready && huart1.gState == HAL_UART_STATE_READY)
     {
       static uint8_t tx_frame[SCAN_FRAME_LENGTH];
-      uint16_t samples[SCAN_SAMPLES_PER_FRAME];
-      uint16_t seq0;
+      uint16_t raw1;
+      uint16_t raw2;
+      uint16_t seq;
       uint8_t crc = 0xFF;
       uint8_t i;
       uint8_t bit;
 
       /* 序号和采样值要成套取出 中间不能被采样中断打断 */
       __disable_irq();
-      for (i = 0; i < SCAN_SAMPLES_PER_FRAME; i++)
-      {
-        samples[i] = ready_samples[i];
-      }
-      seq0 = ready_seq0;
-      frame_ready = 0;
+      raw1 = sample_raw[0];
+      raw2 = sample_raw[1];
+      seq = sample_seq;
+      adc_ready = 0;
       __enable_irq();
 
       tx_frame[0] = SCAN_FRAME_HEADER;
-      tx_frame[1] = (uint8_t)(seq0 & 0xFF);
-      tx_frame[2] = (uint8_t)(seq0 >> 8);
+      tx_frame[1] = (uint8_t)(seq & 0xFF);
+      tx_frame[2] = (uint8_t)(seq >> 8);
 
-      /* 每两个12位采样挤成3字节 */
-      for (i = 0; i < SCAN_SAMPLES_PER_FRAME; i += 2)
-      {
-        uint16_t a = samples[i];
-        uint16_t b = samples[i + 1];
-        uint8_t *group = &tx_frame[3 + (i / 2) * 3];
-
-        group[0] = (uint8_t)(a & 0xFF);
-        group[1] = (uint8_t)(((a >> 8) & 0x0F) | ((b & 0x0F) << 4));
-        group[2] = (uint8_t)(b >> 4);
-      }
+      /* 两个12位采样挤成3字节 */
+      tx_frame[3] = (uint8_t)(raw1 & 0xFF);
+      tx_frame[4] = (uint8_t)(((raw1 >> 8) & 0x0F) | ((raw2 & 0x0F) << 4));
+      tx_frame[5] = (uint8_t)(raw2 >> 4);
 
       /* CRC8 多项式0x07 初值0xFF */
       for (i = 0; i < SCAN_FRAME_LENGTH - 1; i++)
@@ -283,27 +275,15 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     if (hadc->Instance == ADC1)
     {
-        uint8_t i;
-
-        if (build_count == 0)
-        {
-            build_seq0 = sample_seq; //记下这一帧第一个采样的序号
-        }
-
-        build_samples[build_count++] = (uint16_t)(adc_raw & 0x0FFF);
+        //立刻锁存 下一次采样会覆盖adc_raw
+        sample_raw[0] = (uint16_t)(adc_raw[0] & 0x0FFF);
+#if SCAN_SENSOR_COUNT >= 2
+        sample_raw[1] = (uint16_t)(adc_raw[1] & 0x0FFF);
+#else
+        sample_raw[1] = SCAN_RAW_NOT_INSTALLED; //没装第二个传感器
+#endif
         sample_seq++;
-
-        if (build_count >= SCAN_SAMPLES_PER_FRAME)
-        {
-            //攒满一帧 交给主循环发送
-            for (i = 0; i < SCAN_SAMPLES_PER_FRAME; i++)
-            {
-                ready_samples[i] = build_samples[i];
-            }
-            ready_seq0 = build_seq0;
-            frame_ready = 1;
-            build_count = 0;
-        }
+        adc_ready = 1;
     }
 }
 

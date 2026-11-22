@@ -2,32 +2,16 @@
 
 /**
  * @file Scan_Sync.c
- * @brief 测距数据与里程、转角的同步
+ * @brief 测距数据与里程、转角的同步(有线连接版)
  *
- * 为什么不能直接用"收到数据的时刻"去配θ:
- *   433M模块是攒一批再发 数据到达主控的时刻比采样时刻晚 而且晚多少每次不一样
- *   测距舱300rpm时 1ms对应1.8度 到达时刻抖动10ms 点就偏18度
- *
- * 做法:
- *   L432KC的采样是定时器触发的 间隔严格相等 所以 采样时刻 = 序号 × 周期 + 常数
- *   每一帧 到达时刻 - 序号 × 周期 = 常数 + 本次延时  延时只会让它偏大
- *   所以跟踪这个量的最小值 就得到一条不受抖动影响的时间线
- *   具体是每1024个采样为一块 记下块内延时最小的那一帧 保留最近32块
- *   周期 = 最新一块与最老一块的这两帧 时间差除以序号差
- *   时间线 = 以该周期为斜率 从下方贴住最近4块这几帧的那条直线
- *   两块板的晶振有偏差(L432KC用的是内部RC 偏差可到1%) 所以周期也要在线估计
+ * 测距舱300rpm时 1ms对应1.8度 所以ρ和θ必须按同一时刻配对
+ * 有线连接下 数据从采样到进入主控的延时是固定的(约0.7ms) 所以:
+ *   采样时刻 = 到达时刻 - 固定延时
+ * 再拿这个时刻去转角里程历史里插值 就得到采样那一刻的θ和x
  *
  * 调用关系: Push_Pose在CAN接收中断 Rx_Data在USART6接收中断 Pop_Record在主循环
  * 主控上CAN和串口中断优先级相同 互相不会打断 所以前两者之间不需要加锁
  */
-
-#define SCAN_PERIOD_NOMINAL_Q16 ((uint32_t)SCAN_SAMPLE_PERIOD_US << 16)
-#define SCAN_PERIOD_LIMIT_Q16 (SCAN_PERIOD_NOMINAL_Q16 / 50U) //周期估计值限制在标称值±2%以内
-#define SCAN_PERIOD_BLOCK 1024U    //每这么多个采样为一个统计块
-#define SCAN_MIN_HISTORY 32U       //保留最近多少个统计块的最小延时帧 用于估计周期 跨度越长周期越准
-#define SCAN_ANCHOR_BLOCKS 4U      //时间线只贴住最近这么多块 太多会把周期的残余误差放大
-#define SCAN_MAX_SEQUENCE_GAP 2000U //序号跳变超过这个值视为测距板重启或长时间断流 重新开始估计
-#define SCAN_MAX_EXTRAPOLATE_US 5000 //采样时刻比最新一条转角历史还新时 最多允许外推这么久
 
 /* ---------------- 转角里程历史 ---------------- */
 
@@ -52,26 +36,11 @@ static volatile uint32_t Record_Read = 0;  //只有主循环改
 static uint8_t Frame_Buffer[SCAN_FRAME_LENGTH];
 static uint8_t Frame_Count = 0;
 
-/* ---------------- 序号与时间线估计状态 ---------------- */
+/* ---------------- 序号 ---------------- */
 
-static uint8_t Timeline_Valid = 0;
+static uint8_t Sequence_Valid = 0; //是否已经收到过第一帧
 static uint16_t Last_Sequence16 = 0;
 static uint32_t Sequence32 = 0;
-
-static uint32_t Ref_Sequence = 0; //时间线上的参考点: 序号
-static uint32_t Ref_Time_us = 0;  //时间线上的参考点: 该序号对应的时刻
-static uint32_t Ref_Frac_Q16 = 0; //参考点时刻的小数部分
-static uint32_t Period_Q16 = SCAN_PERIOD_NOMINAL_Q16;
-
-static uint32_t Block_Sequence0 = 0; //当前统计块的起点
-static uint32_t Block_Time0 = 0;
-static uint8_t Block_Has_Min = 0;
-static int32_t Block_Min_Error = 0;
-static uint32_t Block_Min_Sequence = 0;
-static uint32_t Block_Min_Time = 0;
-static uint32_t Min_Sequence[SCAN_MIN_HISTORY]; //最近几个统计块里各自延时最小的那一帧 下标0最老
-static uint32_t Min_Time[SCAN_MIN_HISTORY];
-static uint8_t Min_Count = 0;
 
 static Struct_Scan_Statistics Statistics;
 static volatile float Last_Distance_mm = -1.0f;
@@ -85,16 +54,13 @@ void Scan_Sync_Init(void)
     Record_Write = 0;
     Record_Read = 0;
     Frame_Count = 0;
-    Timeline_Valid = 0;
-    Period_Q16 = SCAN_PERIOD_NOMINAL_Q16;
-    Min_Count = 0;
+    Sequence_Valid = 0;
+    Sequence32 = 0;
     Statistics.Frames_Ok = 0;
-    Statistics.Samples_Ok = 0;
     Statistics.Checksum_Errors = 0;
     Statistics.Lost_Samples = 0;
     Statistics.No_Pose_Drops = 0;
     Statistics.Overflow_Drops = 0;
-    Statistics.Period_Q16 = SCAN_PERIOD_NOMINAL_Q16;
     Last_Distance_mm = -1.0f;
 }
 
@@ -122,7 +88,7 @@ uint8_t Scan_Sync_Frame_Checksum(const uint8_t *Frame)
 }
 
 /**
- * @brief ADC原始值换算为传感器读数 单位微米 报警或超范围返回SCAN_RHO_INVALID
+ * @brief ADC原始值换算为传感器读数 单位微米 报警、超范围或未安装返回SCAN_RHO_INVALID
  */
 uint16_t Scan_Sync_Raw_To_Rho_um(uint16_t Raw)
 {
@@ -224,159 +190,27 @@ static uint8_t Scan_Sync_Lookup_Pose(uint32_t Time_us, uint16_t *Theta, float *X
 }
 
 /**
- * @brief 开始一个新的周期统计块
- */
-static void Scan_Sync_Start_Block(uint32_t Sequence, uint32_t Arrival_Time_us)
-{
-    Block_Sequence0 = Sequence;
-    Block_Time0 = Arrival_Time_us;
-    Block_Has_Min = 0;
-}
-
-/**
- * @brief 由序号和到达时刻估计采样时刻
- * @return 估计的采样时刻(含固定延时 调用者再减SCAN_FIXED_LATENCY_US)
- */
-static uint32_t Scan_Sync_Estimate_Time(uint32_t Sequence, uint32_t Arrival_Time_us)
-{
-    uint32_t delta_sequence;
-    uint64_t advance;
-    uint32_t predicted;
-    int32_t error;
-    int32_t block_error;
-
-    if (!Timeline_Valid)
-    {
-        Timeline_Valid = 1;
-        Ref_Sequence = Sequence;
-        Ref_Time_us = Arrival_Time_us;
-        Ref_Frac_Q16 = 0;
-        Min_Count = 0;
-        Scan_Sync_Start_Block(Sequence, Arrival_Time_us);
-        return Arrival_Time_us;
-    }
-
-    //沿时间线从参考点推到当前序号
-    delta_sequence = Sequence - Ref_Sequence;
-    advance = (uint64_t)delta_sequence * Period_Q16 + Ref_Frac_Q16;
-    predicted = Ref_Time_us + (uint32_t)(advance >> 16);
-
-    //到达时刻不可能早于采样时刻 所以实际到达比预测早 说明时间线偏晚了 直接拉回来
-    //实际到达比预测晚 是正常的传输延时 不动时间线
-    error = (int32_t)(Arrival_Time_us - predicted);
-
-    if (error < 0)
-    {
-        predicted = Arrival_Time_us;
-        Ref_Frac_Q16 = 0;
-    }
-    else
-    {
-        Ref_Frac_Q16 = (uint32_t)(advance & 0xFFFFU);
-    }
-
-    Ref_Sequence = Sequence;
-    Ref_Time_us = predicted;
-
-    //记下本统计块里延时最小的一帧
-    block_error = (int32_t)(Arrival_Time_us - Block_Time0) - (int32_t)(((uint64_t)(Sequence - Block_Sequence0) * Period_Q16) >> 16);
-
-    if (!Block_Has_Min || block_error < Block_Min_Error)
-    {
-        Block_Has_Min = 1;
-        Block_Min_Error = block_error;
-        Block_Min_Sequence = Sequence;
-        Block_Min_Time = Arrival_Time_us;
-    }
-
-    if (Sequence - Block_Sequence0 >= SCAN_PERIOD_BLOCK)
-    {
-        uint8_t k;
-        uint32_t line;
-        uint32_t lowest;
-
-        //存入历史 满了就挤掉最老的
-        if (Min_Count == SCAN_MIN_HISTORY)
-        {
-            for (k = 1; k < SCAN_MIN_HISTORY; k++)
-            {
-                Min_Sequence[k - 1] = Min_Sequence[k];
-                Min_Time[k - 1] = Min_Time[k];
-            }
-            Min_Count--;
-        }
-        Min_Sequence[Min_Count] = Block_Min_Sequence;
-        Min_Time[Min_Count] = Block_Min_Time;
-        Min_Count++;
-
-        //周期 = 最新与最老两帧的时间差除以序号差 跨度越长越准
-        if (Min_Count >= 2U && (Min_Sequence[Min_Count - 1U] - Min_Sequence[0]) >= SCAN_PERIOD_BLOCK / 2U)
-        {
-            uint32_t measured = (uint32_t)((((uint64_t)(Min_Time[Min_Count - 1U] - Min_Time[0])) << 16) / (Min_Sequence[Min_Count - 1U] - Min_Sequence[0]));
-
-            if (measured > SCAN_PERIOD_NOMINAL_Q16 + SCAN_PERIOD_LIMIT_Q16)
-            {
-                measured = SCAN_PERIOD_NOMINAL_Q16 + SCAN_PERIOD_LIMIT_Q16;
-            }
-            else if (measured < SCAN_PERIOD_NOMINAL_Q16 - SCAN_PERIOD_LIMIT_Q16)
-            {
-                measured = SCAN_PERIOD_NOMINAL_Q16 - SCAN_PERIOD_LIMIT_Q16;
-            }
-
-            Period_Q16 = measured;
-            Statistics.Period_Q16 = Period_Q16;
-        }
-
-        //时间线: 以当前周期为斜率 把最近几块的最小延时帧都推到当前序号 取最早的那个 即从下方贴住它们
-        lowest = Arrival_Time_us;
-        for (k = (Min_Count > SCAN_ANCHOR_BLOCKS) ? (uint8_t)(Min_Count - SCAN_ANCHOR_BLOCKS) : 0; k < Min_Count; k++)
-        {
-            line = Min_Time[k] + (uint32_t)(((uint64_t)(Sequence - Min_Sequence[k]) * Period_Q16) >> 16);
-            if ((int32_t)(line - lowest) < 0)
-            {
-                lowest = line;
-            }
-        }
-        Ref_Time_us = lowest;
-        Ref_Frac_Q16 = 0;
-
-        Scan_Sync_Start_Block(Sequence, Arrival_Time_us);
-    }
-
-    return predicted;
-}
-
-/**
- * @brief 取出帧内第Index个采样的ADC原始值 每两个12位采样挤在3个字节里
- */
-static uint16_t Scan_Sync_Unpack_Sample(const uint8_t *Frame, uint8_t Index)
-{
-    const uint8_t *group = &Frame[3 + (Index / 2U) * 3U];
-
-    if ((Index & 1U) == 0U)
-    {
-        return (uint16_t)(group[0] | ((uint16_t)(group[1] & 0x0FU) << 8));
-    }
-
-    return (uint16_t)((group[1] >> 4) | ((uint16_t)group[2] << 4));
-}
-
-/**
- * @brief 处理一帧校验通过的测距数据 一帧里有SCAN_SAMPLES_PER_FRAME个采样
+ * @brief 处理一帧校验通过的测距数据
  */
 static void Scan_Sync_Handle_Frame(const uint8_t *Frame, uint32_t Arrival_Time_us)
 {
-    uint16_t sequence16 = (uint16_t)(Frame[1] | ((uint16_t)Frame[2] << 8)); //本帧第一个采样的序号
+    uint16_t sequence16 = (uint16_t)(Frame[1] | ((uint16_t)Frame[2] << 8));
+    uint16_t raw1 = (uint16_t)(Frame[3] | ((uint16_t)(Frame[4] & 0x0FU) << 8));
+    uint16_t raw2 = (uint16_t)((Frame[4] >> 4) | ((uint16_t)Frame[5] << 4));
+    uint16_t rho1_um = Scan_Sync_Raw_To_Rho_um(raw1);
+    uint16_t rho2_um = Scan_Sync_Raw_To_Rho_um(raw2);
     uint16_t step;
-    uint32_t last_time;
-    uint32_t period_q16;
-    uint8_t index;
+    uint32_t sample_time;
+    uint32_t write;
+    Struct_Scan_Record *record;
+    uint16_t theta;
+    float x_m;
 
     Statistics.Frames_Ok++;
-    Statistics.Samples_Ok += SCAN_SAMPLES_PER_FRAME;
+    Last_Distance_mm = (rho1_um == SCAN_RHO_INVALID) ? -1.0f : (float)rho1_um / 1000.0f;
 
-    //16位序号扩展成32位 顺便统计丢点 正常情况下相邻两帧的序号正好差一帧的采样数
-    if (Timeline_Valid)
+    //16位序号扩展成32位 顺便统计丢点 正常情况下相邻两帧的序号正好差1
+    if (Sequence_Valid)
     {
         step = (uint16_t)(sequence16 - Last_Sequence16);
 
@@ -387,64 +221,44 @@ static void Scan_Sync_Handle_Frame(const uint8_t *Frame, uint32_t Arrival_Time_u
 
         if (step > SCAN_MAX_SEQUENCE_GAP)
         {
-            Timeline_Valid = 0; //测距板重启或长时间断流 时间线作废 下面重新开始
-            Sequence32 += SCAN_SAMPLES_PER_FRAME;
+            Sequence32 += 1U; //测距板重启过 序号重新开始 不算丢点
         }
         else
         {
             Sequence32 += step;
-
-            if (step > SCAN_SAMPLES_PER_FRAME)
-            {
-                Statistics.Lost_Samples += (uint32_t)(step - SCAN_SAMPLES_PER_FRAME);
-            }
+            Statistics.Lost_Samples += (uint32_t)(step - 1U);
         }
     }
 
+    Sequence_Valid = 1;
     Last_Sequence16 = sequence16;
 
-    //帧是在最后一个采样完成后才发出的 所以到达时刻对应的是最后一个采样
-    //用最后一个采样的序号去更新时间线 再按周期往前倒推出帧内其余采样的时刻
-    last_time = Scan_Sync_Estimate_Time(Sequence32 + SCAN_SAMPLES_PER_FRAME - 1U, Arrival_Time_us) - (uint32_t)SCAN_FIXED_LATENCY_US;
-    period_q16 = Period_Q16;
+    //有线连接延时固定 到达时刻减去固定延时就是采样时刻
+    sample_time = Arrival_Time_us - (uint32_t)SCAN_FIXED_LATENCY_US;
 
-    for (index = 0; index < SCAN_SAMPLES_PER_FRAME; index++)
+    if (!Scan_Sync_Lookup_Pose(sample_time, &theta, &x_m))
     {
-        uint16_t rho_um = Scan_Sync_Raw_To_Rho_um(Scan_Sync_Unpack_Sample(Frame, index));
-        uint32_t samples_before_last = (uint32_t)(SCAN_SAMPLES_PER_FRAME - 1U - index);
-        uint32_t sample_time = last_time - (uint32_t)(((uint64_t)samples_before_last * period_q16) >> 16);
-        uint32_t write;
-        Struct_Scan_Record *record;
-        uint16_t theta;
-        float x_m;
-
-        if (index == SCAN_SAMPLES_PER_FRAME - 1U)
-        {
-            Last_Distance_mm = (rho_um == SCAN_RHO_INVALID) ? -1.0f : (float)rho_um / 1000.0f;
-        }
-
-        if (!Scan_Sync_Lookup_Pose(sample_time, &theta, &x_m))
-        {
-            Statistics.No_Pose_Drops++;
-            continue;
-        }
-
-        write = Record_Write;
-
-        if (write - Record_Read >= SCAN_RECORD_BUFFER_SIZE)
-        {
-            Statistics.Overflow_Drops++;
-            continue;
-        }
-
-        record = &Record_Buffer[write & (SCAN_RECORD_BUFFER_SIZE - 1U)];
-        record->Sequence = Sequence32 + index;
-        record->Theta = theta;
-        record->Rho_um = rho_um;
-        record->X_m = x_m;
-
-        Record_Write = write + 1U; //数据写完再移动写指针 主循环不会读到半条
+        Statistics.No_Pose_Drops++;
+        return;
     }
+
+    write = Record_Write;
+
+    if (write - Record_Read >= SCAN_RECORD_BUFFER_SIZE)
+    {
+        Statistics.Overflow_Drops++;
+        return;
+    }
+
+    record = &Record_Buffer[write & (SCAN_RECORD_BUFFER_SIZE - 1U)];
+    record->Sequence = Sequence32;
+    record->Theta = theta;
+    record->Rho1_um = rho1_um;
+    record->Rho2_um = rho2_um;
+    record->Reserved = 0;
+    record->X_m = x_m;
+
+    Record_Write = write + 1U; //数据写完再移动写指针 主循环不会读到半条
 }
 
 /**
