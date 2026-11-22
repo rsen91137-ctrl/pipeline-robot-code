@@ -6,9 +6,9 @@
  * @brief 测距数据与里程、转角的同步 把(ρ, θ, x)配成一条完整测点
  *
  * 数据流:
- *   L432KC 每次ADC采样 -> 6字节帧(带采样序号) -> 433M -> 主控USART6
+ *   L432KC 每次ADC采样编一个序号 -> 攒够16个打成一帧 -> 433M -> 主控USART6
  *   主控 GM6020每次CAN反馈 -> 存一条(时间, 编码器, 里程)历史
- *   主控 收到测距帧 -> 用序号还原采样时刻 -> 到历史里插值出当时的θ和x -> 写入测点缓冲区
+ *   主控 收到测距帧 -> 用序号还原帧内每个采样的时刻 -> 到历史里插值出当时的θ和x -> 写入测点缓冲区
  *
  * 本文件不依赖HAL 可以在电脑上单独编译测试
  */
@@ -20,15 +20,23 @@ extern "C" {
 #endif
 
 /* ---------------- L432KC -> 主控 的帧格式 两块板必须一致 ----------------
- * 字节0     帧头 0xA5
- * 字节1~2   采样序号 uint16 小端 每次采样加1 溢出回0
- * 字节3~4   ADC原始值 uint16 小端 (12位)
- * 字节5     校验 = 前5字节求和后按位取反
+ * 433M模块在128k空中速率下 官方保证能持续传输的量约1920字节/秒(对应19200波特率)
+ * 一个采样发一帧的话 1000Hz要6000字节/秒 超了 所以把16个采样合成一帧:
+ *   每帧28字节 每16ms一帧 合1750字节/秒 在保证值以内
+ *
+ * 字节0       帧头 0xA5
+ * 字节1~2     本帧第一个采样的序号 uint16 小端 每个采样加1 溢出回0
+ * 字节3~26    16个ADC原始值 每个12位 两个采样a b挤成3字节:
+ *               第1字节 = a的低8位
+ *               第2字节 = a的高4位(放低半字节) | b的低4位(放高半字节)
+ *               第3字节 = b的高8位
+ * 字节27      CRC8校验 多项式0x07 初值0xFF 覆盖前27字节
  */
 #define SCAN_FRAME_HEADER 0xA5
-#define SCAN_FRAME_LENGTH 6
+#define SCAN_SAMPLES_PER_FRAME 16 //每帧采样数 必须是偶数 改它要同时改两块板
+#define SCAN_FRAME_LENGTH (3 + SCAN_SAMPLES_PER_FRAME * 3 / 2 + 1)
 
-#define SCAN_SAMPLE_PERIOD_US 1000 //L432KC采样周期标称值 TIM2为1000Hz
+#define SCAN_SAMPLE_PERIOD_US 1000 //L432KC采样周期标称值 必须等于 1000000 / 测距板的SCAN_SAMPLE_RATE_HZ
 #define SCAN_UART_BYTE_TIME_US 87  //USART6一个字节的传输时间 115200波特率 10位
 #define SCAN_FIXED_LATENCY_US 0    //采样到主控收到的固定延时 需台架标定 标定前为0 只会让点云整体绕轴转一个固定角度
 
@@ -62,6 +70,7 @@ typedef struct
 typedef struct
 {
     uint32_t Frames_Ok;       //校验通过的帧数
+    uint32_t Samples_Ok;      //校验通过的帧里包含的采样数
     uint32_t Checksum_Errors; //帧头对上但校验错的次数
     uint32_t Lost_Samples;    //由序号跳变算出的丢点数
     uint32_t No_Pose_Drops;   //找不到对应时刻的转角里程而丢弃的点数

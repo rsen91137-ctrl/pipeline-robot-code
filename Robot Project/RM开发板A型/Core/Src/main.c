@@ -124,7 +124,7 @@ void UART_Serialplot_Call_Back(uint8_t *Buffer, uint16_t Length)
 
 /**
  * @brief 测距部分返回数据处理 USART6接收中断里调用
- *        L432KC发来的是6字节二进制帧(帧头 采样序号 ADC原始值 校验) 格式见Scan_Sync.h
+ *        L432KC发来的是28字节二进制帧(帧头 首个采样序号 16个ADC原始值 校验) 格式见Scan_Sync.h
  *        解析、还原采样时刻、配上当时的转角和里程 都在同步模块里完成
  * 
  * @param Buffer 接收缓冲区

@@ -58,7 +58,7 @@
 
 #endif //已作废部分结束
 
-#define ROTATION_DIS_MEASURE_DATA_MAX_LENGTH 120 //USART6一次最多接收的字节数 为测距帧长度6的整数倍
+#define ROTATION_DIS_MEASURE_DATA_MAX_LENGTH 112 //USART6一次最多接收的字节数 为测距帧长度28的整数倍
 
 #define OFFLINE_TIMEOUT_MS 15000U //上位机心跳超时时间 上位机每5秒发一次Online 连续丢3次判定为断线
 #define PLOT_PERIOD_MS 20U //串口绘图发送间隔 一帧49字节在57600波特率下要8.5ms 不能每个周期都发

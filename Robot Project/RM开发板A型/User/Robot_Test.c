@@ -423,11 +423,11 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
     Rotate_Now_Speed = Get_Rotate_Now_Speed(motor2);
 
     //测距链路质量 每秒统计一次 用来判断433M模块带不带得动当前的数据量
-    //CH6 每秒收到的测距帧数 正常应接近采样率1000
+    //CH6 每秒收到的采样数 正常应接近采样率1000
     //CH7 每秒丢失的采样数 由序号跳变算出 正常应接近0
     //CH8 累计校验错误次数
-    static uint32_t Last_Link_Tick = 0 , Last_Frames_Ok = 0 , Last_Lost_Samples = 0;
-    static float Link_Frames_Per_Second = 0.0f , Link_Lost_Per_Second = 0.0f , Link_Checksum_Errors = 0.0f;
+    static uint32_t Last_Link_Tick = 0 , Last_Samples_Ok = 0 , Last_Lost_Samples = 0;
+    static float Link_Samples_Per_Second = 0.0f , Link_Lost_Per_Second = 0.0f , Link_Checksum_Errors = 0.0f;
 
     if(HAL_GetTick() - Last_Link_Tick >= 1000U){
 
@@ -435,17 +435,17 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
 
         Scan_Sync_Get_Statistics(&Statistics);
 
-        Link_Frames_Per_Second = (float)(Statistics.Frames_Ok - Last_Frames_Ok);
+        Link_Samples_Per_Second = (float)(Statistics.Samples_Ok - Last_Samples_Ok);
         Link_Lost_Per_Second = (float)(Statistics.Lost_Samples - Last_Lost_Samples);
         Link_Checksum_Errors = (float)Statistics.Checksum_Errors;
 
-        Last_Frames_Ok = Statistics.Frames_Ok;
+        Last_Samples_Ok = Statistics.Samples_Ok;
         Last_Lost_Samples = Statistics.Lost_Samples;
         Last_Link_Tick = HAL_GetTick();
 
     }
 
-    serialplot.Set_Data(8,&Robot_Target_Speed, &Robot_Now_Speed, &motor.TotalDistance , &Rotate_Target_Speed, &Rotate_Now_Speed , &Link_Frames_Per_Second , &Link_Lost_Per_Second , &Link_Checksum_Errors);
+    serialplot.Set_Data(8,&Robot_Target_Speed, &Robot_Now_Speed, &motor.TotalDistance , &Rotate_Target_Speed, &Rotate_Now_Speed , &Link_Samples_Per_Second , &Link_Lost_Per_Second , &Link_Checksum_Errors);
     serialplot.TIM_Write_PeriodElapsedCallback();
 
     TIM_UART_PeriodElapsedCallback();

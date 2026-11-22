@@ -89,6 +89,7 @@ void Scan_Sync_Init(void)
     Period_Q16 = SCAN_PERIOD_NOMINAL_Q16;
     Min_Count = 0;
     Statistics.Frames_Ok = 0;
+    Statistics.Samples_Ok = 0;
     Statistics.Checksum_Errors = 0;
     Statistics.Lost_Samples = 0;
     Statistics.No_Pose_Drops = 0;
@@ -98,19 +99,26 @@ void Scan_Sync_Init(void)
 }
 
 /**
- * @brief 帧校验 前5字节求和后取反 这样全0的数据不会被当成合法帧
+ * @brief 帧校验 CRC8 多项式0x07 初值0xFF 覆盖除最后一个字节外的整帧
+ *        帧变长以后 简单求和发现不了两个字节互相抵消的错误 所以换成CRC
  */
 uint8_t Scan_Sync_Frame_Checksum(const uint8_t *Frame)
 {
-    uint8_t sum = 0;
+    uint8_t crc = 0xFF;
     uint8_t i;
+    uint8_t bit;
 
     for (i = 0; i < SCAN_FRAME_LENGTH - 1; i++)
     {
-        sum = (uint8_t)(sum + Frame[i]);
+        crc ^= Frame[i];
+
+        for (bit = 0; bit < 8; bit++)
+        {
+            crc = (crc & 0x80U) ? (uint8_t)((crc << 1) ^ 0x07U) : (uint8_t)(crc << 1);
+        }
     }
 
-    return (uint8_t)(~sum);
+    return crc;
 }
 
 /**
@@ -339,24 +347,35 @@ static uint32_t Scan_Sync_Estimate_Time(uint32_t Sequence, uint32_t Arrival_Time
 }
 
 /**
- * @brief 处理一帧校验通过的测距数据
+ * @brief 取出帧内第Index个采样的ADC原始值 每两个12位采样挤在3个字节里
+ */
+static uint16_t Scan_Sync_Unpack_Sample(const uint8_t *Frame, uint8_t Index)
+{
+    const uint8_t *group = &Frame[3 + (Index / 2U) * 3U];
+
+    if ((Index & 1U) == 0U)
+    {
+        return (uint16_t)(group[0] | ((uint16_t)(group[1] & 0x0FU) << 8));
+    }
+
+    return (uint16_t)((group[1] >> 4) | ((uint16_t)group[2] << 4));
+}
+
+/**
+ * @brief 处理一帧校验通过的测距数据 一帧里有SCAN_SAMPLES_PER_FRAME个采样
  */
 static void Scan_Sync_Handle_Frame(const uint8_t *Frame, uint32_t Arrival_Time_us)
 {
-    uint16_t sequence16 = (uint16_t)(Frame[1] | ((uint16_t)Frame[2] << 8));
-    uint16_t raw = (uint16_t)(Frame[3] | ((uint16_t)Frame[4] << 8));
-    uint16_t rho_um = Scan_Sync_Raw_To_Rho_um(raw);
+    uint16_t sequence16 = (uint16_t)(Frame[1] | ((uint16_t)Frame[2] << 8)); //本帧第一个采样的序号
     uint16_t step;
-    uint32_t sample_time;
-    uint32_t write;
-    Struct_Scan_Record *record;
-    uint16_t theta;
-    float x_m;
+    uint32_t last_time;
+    uint32_t period_q16;
+    uint8_t index;
 
     Statistics.Frames_Ok++;
-    Last_Distance_mm = (rho_um == SCAN_RHO_INVALID) ? -1.0f : (float)rho_um / 1000.0f;
+    Statistics.Samples_Ok += SCAN_SAMPLES_PER_FRAME;
 
-    //16位序号扩展成32位 顺便统计丢点
+    //16位序号扩展成32位 顺便统计丢点 正常情况下相邻两帧的序号正好差一帧的采样数
     if (Timeline_Valid)
     {
         step = (uint16_t)(sequence16 - Last_Sequence16);
@@ -369,40 +388,63 @@ static void Scan_Sync_Handle_Frame(const uint8_t *Frame, uint32_t Arrival_Time_u
         if (step > SCAN_MAX_SEQUENCE_GAP)
         {
             Timeline_Valid = 0; //测距板重启或长时间断流 时间线作废 下面重新开始
-            Sequence32 += 1U;
+            Sequence32 += SCAN_SAMPLES_PER_FRAME;
         }
         else
         {
             Sequence32 += step;
-            Statistics.Lost_Samples += (uint32_t)(step - 1U);
+
+            if (step > SCAN_SAMPLES_PER_FRAME)
+            {
+                Statistics.Lost_Samples += (uint32_t)(step - SCAN_SAMPLES_PER_FRAME);
+            }
         }
     }
 
     Last_Sequence16 = sequence16;
 
-    sample_time = Scan_Sync_Estimate_Time(Sequence32, Arrival_Time_us) - (uint32_t)SCAN_FIXED_LATENCY_US;
+    //帧是在最后一个采样完成后才发出的 所以到达时刻对应的是最后一个采样
+    //用最后一个采样的序号去更新时间线 再按周期往前倒推出帧内其余采样的时刻
+    last_time = Scan_Sync_Estimate_Time(Sequence32 + SCAN_SAMPLES_PER_FRAME - 1U, Arrival_Time_us) - (uint32_t)SCAN_FIXED_LATENCY_US;
+    period_q16 = Period_Q16;
 
-    if (!Scan_Sync_Lookup_Pose(sample_time, &theta, &x_m))
+    for (index = 0; index < SCAN_SAMPLES_PER_FRAME; index++)
     {
-        Statistics.No_Pose_Drops++;
-        return;
+        uint16_t rho_um = Scan_Sync_Raw_To_Rho_um(Scan_Sync_Unpack_Sample(Frame, index));
+        uint32_t samples_before_last = (uint32_t)(SCAN_SAMPLES_PER_FRAME - 1U - index);
+        uint32_t sample_time = last_time - (uint32_t)(((uint64_t)samples_before_last * period_q16) >> 16);
+        uint32_t write;
+        Struct_Scan_Record *record;
+        uint16_t theta;
+        float x_m;
+
+        if (index == SCAN_SAMPLES_PER_FRAME - 1U)
+        {
+            Last_Distance_mm = (rho_um == SCAN_RHO_INVALID) ? -1.0f : (float)rho_um / 1000.0f;
+        }
+
+        if (!Scan_Sync_Lookup_Pose(sample_time, &theta, &x_m))
+        {
+            Statistics.No_Pose_Drops++;
+            continue;
+        }
+
+        write = Record_Write;
+
+        if (write - Record_Read >= SCAN_RECORD_BUFFER_SIZE)
+        {
+            Statistics.Overflow_Drops++;
+            continue;
+        }
+
+        record = &Record_Buffer[write & (SCAN_RECORD_BUFFER_SIZE - 1U)];
+        record->Sequence = Sequence32 + index;
+        record->Theta = theta;
+        record->Rho_um = rho_um;
+        record->X_m = x_m;
+
+        Record_Write = write + 1U; //数据写完再移动写指针 主循环不会读到半条
     }
-
-    write = Record_Write;
-
-    if (write - Record_Read >= SCAN_RECORD_BUFFER_SIZE)
-    {
-        Statistics.Overflow_Drops++;
-        return;
-    }
-
-    record = &Record_Buffer[write & (SCAN_RECORD_BUFFER_SIZE - 1U)];
-    record->Sequence = Sequence32;
-    record->Theta = theta;
-    record->Rho_um = rho_um;
-    record->X_m = x_m;
-
-    Record_Write = write + 1U; //数据写完再移动写指针 主循环不会读到半条
 }
 
 /**
