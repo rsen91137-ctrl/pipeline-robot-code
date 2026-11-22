@@ -30,6 +30,8 @@
 #define MOTOR4_DERECTION_SYMBOL (+1.0f) 
 //同上
 
+#if 0 //已作废: 机械调零与管径自适应方案取消(调零 自适应 余量 角度控制 张角计算) 代码保留备查 不参与编译
+
 #define FRONT_ANGLE_MINIMUM 20.0f //前端力臂最小夹角 角度制
 #define FRONT_ANGLE_MAXIMUM 120.0f //前端力臂最大夹角 角度制
 #define FRONT_LENGTH 0.1f //前端力臂长度 转轴到轮心 单位米
@@ -54,10 +56,11 @@
 
 #define LIMIT 0.005 //初始化或调零要求的机器人的速度阈值
 
+#endif //已作废部分结束
+
 #define ROTATION_DIS_MEASURE_DATA_MAX_LENGTH 120 //USART6一次最多接收的字节数 为测距帧长度6的整数倍
 
 #define OFFLINE_TIMEOUT_MS 15000U //上位机心跳超时时间 上位机每5秒发一次Online 连续丢3次判定为断线
-#define ZERO_TIMEOUT_MS 15000U //调零最长等待时间 超时则放弃
 #define PLOT_PERIOD_MS 20U //串口绘图发送间隔 一帧49字节在57600波特率下要8.5ms 不能每个周期都发
 
 #define SCAN_UPLINK_FRAME_HEADER 0xAC //测点回传帧头
@@ -79,6 +82,8 @@ extern float motor4_Start_Angle;
 
       ;
 
+#if 0 //已作废: 机械调零与管径自适应方案取消(调零 自适应 余量 角度控制 张角计算) 代码保留备查 不参与编译
+
 //调零开关
 enum Zero_State
 {
@@ -87,6 +92,8 @@ enum Zero_State
     ZERO_DONE        // 已松开，调零完成
 };
 
+#endif //已作废部分结束
+
 typedef enum{
     M3508,
     GM6020,
@@ -94,8 +101,12 @@ typedef enum{
     M2006_Rear //motor4
 }Motor_Name;
 
+#if 0 //已作废: 机械调零与管径自适应方案取消(调零 自适应 余量 角度控制 张角计算) 代码保留备查 不参与编译
+
 extern Zero_State zero3_state;
 extern Zero_State zero4_state;
+
+#endif //已作废部分结束
 
 extern int IfPlotSending , IfsychroDataSending; //数据传回标志位
 
@@ -139,7 +150,7 @@ void Rotate_Distance_Measurement_Speed_Control(float Rotate_Target_Speed , Class
 
 void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C610 &motor);  //M2006旋转指定圈数
 
-void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);
+//void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor); //已作废
 
 void Motor_Stop_Operation(Motor_Name name);
 
@@ -173,6 +184,8 @@ float Get_Rotate_Now_Speed(Class_Motor_GM6020 &motor2);
 void CAN_Call_Back_Configuration(Struct_CAN_Rx_Buffer *Rx_Buffer , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3, Class_Motor_C610 &motor4);
 
 
+#if 0 //已作废: 机械调零与管径自适应方案取消(调零 自适应 余量 角度控制 张角计算) 代码保留备查 不参与编译
+
 //调零函数 由于结构元婴 暂时用不到
 extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin); //按钮触发回调函数
 
@@ -195,6 +208,8 @@ void Structure_Init_Processing(void); //放在主循环 实际执行调零与卡
 float Angle_Round_Transfer(float Angle , Class_Motor_C610 &motor); //目标张角转换为螺母圈数
 
 float Angle_Caculate_From_Radius(float Radius); //管道半径转换为张开角度
+
+#endif //已作废部分结束
 
 //void Caculate_Total_Distance(); //统计机器人走的总路程
 

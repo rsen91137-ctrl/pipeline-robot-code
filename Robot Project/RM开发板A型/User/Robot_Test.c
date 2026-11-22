@@ -324,26 +324,11 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
 
         }
         break;
-        case(35):{
+        case(35): //initialize 已作废: 机械调零与管径自适应方案取消 字典里保留这条是为了不改变后面命令的编号
+        case(36): //setzero 已作废 同上
+        {
 
-            //命令的数值就是管道半径 单位米 例如 initialize=0.075#
-            //原来传进去的是轮子半径RADIUS 且只判了速度上限 机器人倒着走时也会执行
-            if(motor.Get_Now_Omega() < LIMIT && motor.Get_Now_Omega() > -LIMIT){
-
-                Structure_Init(serialplot.Get_Variable_Value(),EXTRA);
-
-            }
-
-        }
-        break;
-        case(36):{
-
-            if(motor.Get_Now_Omega() < LIMIT && motor.Get_Now_Omega() > -LIMIT){
-
-                Operate_Motor_Set_Zero(motor3);
-                Operate_Motor_Set_Zero(motor4);
-
-            }
+            //收到也不做任何事
 
         }
         break;

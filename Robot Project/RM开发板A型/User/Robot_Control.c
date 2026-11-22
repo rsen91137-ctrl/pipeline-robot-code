@@ -8,15 +8,21 @@ float motor3_Start_Angle = 0.0f;
 float motor4_Target_Delta_Revolutions = 0.0f;
 float motor4_Start_Angle = 0.0f;
 
+#if 0 //已作废: 机械调零与管径自适应方案取消(调零 自适应 余量 角度控制 张角计算) 代码保留备查 不参与编译
+
 //上电时不在调零过程中 只有执行调零命令后才进入ZERO_WAIT_PRESS
 //原来上电就是ZERO_WAIT_PRESS 此时误碰开关会让丝杆电机直接转起来
 Zero_State zero3_state = ZERO_DONE;
 Zero_State zero4_state = ZERO_DONE;
 
+#endif //已作废部分结束
+
 //上位机心跳
 static volatile uint32_t Last_Online_Tick = 0; //最近一次收到Online的时刻
 static volatile uint8_t Online_Received = 0; //上电后是否收到过Online
 static uint8_t Offline_Handled = 0; //本次断线是否已经处理过
+
+#if 0 //已作废: 机械调零与管径自适应方案取消(调零 自适应 余量 角度控制 张角计算) 代码保留备查 不参与编译
 
 //结构初始化(调零+卡紧)的状态
 enum Structure_Init_State
@@ -30,6 +36,8 @@ static volatile Structure_Init_State structure_init_state = STRUCTURE_INIT_IDLE;
 static volatile float Structure_Init_Radius = 0.0f;
 static volatile float Structure_Init_Extra = 0.0f;
 static uint32_t Structure_Init_Start_Tick = 0;
+
+#endif //已作废部分结束
 
 /**
  * @brief 初始化所有配置
@@ -207,6 +215,8 @@ void M2006_Rotate_Specified_Revolutions(float Target_Revolutions , Class_Motor_C
  }
 
  
+#if 0 //已作废: 机械调零与管径自适应方案取消(调零 自适应 余量 角度控制 张角计算) 代码保留备查 不参与编译
+
 /**
  * @brief 丝杆结构角度控制(空载 仅用于初步拟合) 输入为弧度制
  * 
@@ -231,6 +241,8 @@ void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor){
     }
 
  }
+
+#endif //已作废部分结束
 
 /**
  * @brief 电机停机函数 速度环下目标速度设0 角度环下目标角度设为当前角度
@@ -553,6 +565,8 @@ void CAN_Call_Back_Configuration(Struct_CAN_Rx_Buffer *Rx_Buffer , Class_Motor_C
 }
 
 
+
+#if 0 //已作废: 机械调零与管径自适应方案取消(调零 自适应 余量 角度控制 张角计算) 代码保留备查 不参与编译
 
 /**
  * @brief 调零开关回调函数
@@ -879,6 +893,8 @@ float Angle_Caculate_From_Radius(float Radius){
     return Span_Angle;
 
 }
+
+#endif //已作废部分结束
 
 /**
  * @brief 统计机器人总路程函数 放在systick中 速度积分

@@ -76,11 +76,9 @@ int IfPlotSending , IfsychroDataSending; //数据传回标志位
 
 float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_Speed, //机器人距离与速度控制
 
-      Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed, //旋转测距速度控制
+      Rotate_Target_Angle, Rotate_Now_Angle, Rotate_Target_Speed, Rotate_Now_Speed; //旋转测距速度控制
 
-      //丝杆结构角度控制放在c610类中
-      
-      Tube_Radius , Extra_Angle; //管道半径与角度余量
+//float Tube_Radius , Extra_Angle; //管道半径与角度余量 已作废: 管径自适应方案取消
 
 /* Latest received laser distance in mm; -1 means invalid or not yet received. */
 
@@ -260,8 +258,6 @@ int main(void)
         Angle_Adjusting_PID_Processing(motor4);
 
         Motor_CAN_Send_Processing();
-
-        Structure_Init_Processing(); //调零与卡紧的执行
 
         Robot_Test_Scan_Data_Processing(); //测点取出与回传
       
