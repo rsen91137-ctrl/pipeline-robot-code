@@ -23,8 +23,9 @@
 #define SCAN_FRAME_LENGTH 7
 #define SCAN_RAW_NOT_INSTALLED 0x0FFFU //该传感器未安装
 
-#define SCAN_SENSOR_COUNT 1 //已接入的传感器数量 1或2
-                            //改成2之前 要先在CubeMX里把ADC1配成两个通道的扫描转换(见main.c里的说明)
+#define SCAN_SENSOR_COUNT 2 //已接入的传感器数量 1或2
+                            //传感器1接PA0(ADC1通道5) 传感器2接PA1(ADC1通道6) 各自经过12k/18k分压
+                            //只接一个传感器时改回1 否则悬空的PA1会读出乱跳的数
 
 #define SCAN_SAMPLE_RATE_HZ 1000 //采样率
 

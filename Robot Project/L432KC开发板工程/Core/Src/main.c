@@ -121,6 +121,49 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
+#if SCAN_SENSOR_COUNT >= 2
+  /*
+   * 第二个传感器: 在CubeMX生成的单通道配置基础上 改成两个通道的扫描转换
+   * 每次TIM2触发 通道5(PA0 传感器1)和通道6(PA1 传感器2)依次转换 相隔约13微秒
+   * DMA把结果依次写进adc_raw[0]和adc_raw[1] 两个都转完后才进一次转换完成中断
+   * 写在这里而不是改CubeMX 是为了重新生成代码时不被覆盖
+   */
+  {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    ADC_ChannelConfTypeDef sConfig = {0};
+
+    /* PA1设为模拟输入 */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /* 转换个数改为2 开启扫描 其余参数沿用CubeMX的配置 */
+    hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+    hadc1.Init.NbrOfConversion = 2;
+    hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
+
+    if (HAL_ADC_Init(&hadc1) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* 第2个转换: 通道6 采样时间与通道5相同 */
+    sConfig.Channel = ADC_CHANNEL_6;
+    sConfig.Rank = ADC_REGULAR_RANK_2;
+    sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;
+    sConfig.SingleDiff = ADC_SINGLE_ENDED;
+    sConfig.OffsetNumber = ADC_OFFSET_NONE;
+    sConfig.Offset = 0;
+
+    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+    {
+      Error_Handler();
+    }
+  }
+#endif
+
   /* 上电后执行一次；此时 TIM2 尚未启动 */
 
   if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK)
@@ -142,12 +185,6 @@ int main(void)
   开始以 1000 Hz 采样 : HAL_TIM_Base_Start(&htim2);
   停止产生采样触发 : HAL_TIM_Base_Stop(&htim2);
   读取最新 ADC 原始值 : uint16_t raw = adc_raw[0];
-
-  接第二个传感器时(SCAN_SENSOR_COUNT改为2) 需要先在CubeMX里改ADC1:
-    1. 再勾选一个输入通道(第二个传感器接的引脚)
-    2. Number Of Conversion 改为 2  Rank 1 选传感器1的通道  Rank 2 选传感器2的通道
-    3. Scan Conversion Mode 会自动变为 Enabled  其余保持不变(仍由TIM2触发 DMA循环模式)
-  这样每次TIM2触发 两个通道依次转换 DMA把结果写进adc_raw[0]和adc_raw[1] 转换完成中断在两个都转完后进一次
    
    */
 
