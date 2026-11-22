@@ -14,8 +14,9 @@
 #include "oled.h"
 #include "string.h"
 #include "math.h"
+#include "Scan_Sync.h"
 
-#define ANGLE_TO_RADS ( / 180.0f)
+#define ANGLE_TO_RADS (PI / 180.0f)
 #define RADS_TO_RPM (60.0f / (2.0f * PI))
 
 #define RADIUS 0.018f //驱动轮半径 暂时填0.0018
@@ -53,7 +54,15 @@
 
 #define LIMIT 0.005 //初始化或调零要求的机器人的速度阈值
 
-#define ROTATION_DIS_MEASURE_DATA_MAX_LENGTH 20
+#define ROTATION_DIS_MEASURE_DATA_MAX_LENGTH 120 //USART6一次最多接收的字节数 为测距帧长度6的整数倍
+
+#define OFFLINE_TIMEOUT_MS 15000U //上位机心跳超时时间 上位机每5秒发一次Online 连续丢3次判定为断线
+#define ZERO_TIMEOUT_MS 15000U //调零最长等待时间 超时则放弃
+#define PLOT_PERIOD_MS 20U //串口绘图发送间隔 一帧49字节在57600波特率下要8.5ms 不能每个周期都发
+
+#define SCAN_UPLINK_FRAME_HEADER 0xAC //测点回传帧头
+#define SCAN_UPLINK_RECORDS_PER_FRAME 16 //每帧回传的测点数
+#define SCAN_UPLINK_DECIMATION 3 //回传抽稀 每3个测点回传1个 57600波特率传不完全部测点
 
 
 extern float Robot_Move_Target_Delta_Distance; // 记录上位机 ta：本次要走的距离差（米） 便于串口绘图显示距离
@@ -90,9 +99,6 @@ extern Zero_State zero4_state;
 
 extern int IfPlotSending , IfsychroDataSending; //数据传回标志位
 
-extern int Counter = 0; //计数器
-extern int Online = 1; //在线标志位
-extern int OfflineFlag = 0; //断线检测次数标志位 大于等于三次则判定为断线
 
 extern Class_Serialplot serialplot;
 extern Class_Motor_C620 motor; 
@@ -100,7 +106,7 @@ extern Class_Motor_GM6020 motor2;
 extern Class_Motor_C610 motor3;
 extern Class_Motor_C610 motor4;
 
-extern volatile float Rotation_Measured_Distance_mm = -1.0f; //L432KC开发板测距返回数据
+extern volatile float Rotation_Measured_Distance_mm; //L432KC开发板测距返回数据 单位mm -1表示无效
 
 
 /**
@@ -137,6 +143,8 @@ void Screw_Structure_Angle_Set(float Target_Angle , Class_Motor_C610 &motor);
 
 void Motor_Stop_Operation(Motor_Name name);
 
+void Motor_Set_Control_Method(Motor_Name name , Enum_Control_Method method); //切换控制模式 同时把目标值对齐到当前值 防止切换瞬间电机乱动
+
 void Front_Screw_Adjust(float RPM);
 
 void Rear_Screw_Adjust(float RPM);
@@ -151,6 +159,8 @@ void Forward_PID_Processing(Class_Motor_C620 &motor);
 void Rotate_PID_Processing(Class_Motor_GM6020 &motor2);
 
 void Angle_Adjusting_PID_Processing(Class_Motor_C610 &motor);
+
+void Motor_CAN_Send_Processing(void); //四个电机PID都算完后 统一发送一次CAN控制帧
 
 
 //反馈
@@ -176,7 +186,9 @@ void Operate_Motor_Set_Zero(Class_Motor_C610 &motor);//调零启动函数
 //自拟合函数 即和输入管径后与管壁贴合压紧 余量不能定量计算 可以通过实验拟定
 void Auto_Fit_Operation(Class_Motor_C610 &motor , float Radius , float Extra);
 
-void Structure_Init(float Radius , float Extra);
+void Structure_Init(float Radius , float Extra); //只登记请求 可以在中断里调用
+
+void Structure_Init_Processing(void); //放在主循环 实际执行调零与卡紧
 
 
 //转换与计算函数
@@ -187,6 +199,8 @@ float Angle_Caculate_From_Radius(float Radius); //管道半径转换为张开角
 //void Caculate_Total_Distance(); //统计机器人走的总路程
 
 //机器人掉线判定
+void Robot_Online_Feed(void); //收到上位机Online心跳时调用
+
 void Robot_Offline_Detection(void);
 
 //机器人断线处理
@@ -197,5 +211,8 @@ void Robot_Back(void); //按目前的里程进行返程
 void Robot_Control_Panel_Reset(void); //机器人控制面板复位
 
 void Robot_Control_Deal_Slip(void); //机器人应对打滑问题
+
+//时间
+uint32_t Robot_Get_Time_us(void); //上电以来的微秒数 可在中断里调用
 
 #endif

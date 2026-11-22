@@ -88,9 +88,16 @@ uint8_t Class_Serialplot::Judge_Variable_Name()
     int flag;
 
     //记录变量名并标记等号位置
-    for (flag = 0; UART_Manage_Object->Rx_Buffer[flag] != '='; flag++)
+    //必须限制长度: 无线上收到一段不含等号的噪声时 原来会一直往后找 把tmp_variable_name写越界
+    for (flag = 0; flag < SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH - 1 && UART_Manage_Object->Rx_Buffer[flag] != '=' && UART_Manage_Object->Rx_Buffer[flag] != 0; flag++)
     {
         tmp_variable_name[flag] = UART_Manage_Object->Rx_Buffer[flag];
+    }
+    if (UART_Manage_Object->Rx_Buffer[flag] != '=')
+    {
+        //没找到等号 不是合法指令
+        Variable_Index = -1;
+        return (flag + 1);
     }
     tmp_variable_name[flag] = 0;
 
@@ -136,11 +143,18 @@ void Class_Serialplot::Judge_Variable_Value(int flag)
     }
 
     //计算值并注意小数点是否存在及其位置
-    for (i = flag; UART_Manage_Object->Rx_Buffer[i] != '#' && UART_Manage_Object->Rx_Buffer[i] != 0; i++)
+    for (i = flag; i < UART_BUFFER_SIZE && UART_Manage_Object->Rx_Buffer[i] != '#' && UART_Manage_Object->Rx_Buffer[i] != 0; i++)
     {
         if (UART_Manage_Object->Rx_Buffer[i] == '.')
         {
             tmp_dot_flag = i;
+        }
+        else if (UART_Manage_Object->Rx_Buffer[i] < '0' || UART_Manage_Object->Rx_Buffer[i] > '9')
+        {
+            //数值里出现了数字和小数点以外的字符 说明指令被干扰了 整条作废
+            Variable_Index = -1;
+            Variable_Value = 0.0f;
+            return;
         }
         else
         {
@@ -148,6 +162,13 @@ void Class_Serialplot::Judge_Variable_Value(int flag)
         }
     }
 
+    //指令必须以#结尾 没有#说明这条指令在无线上被截断了 数值不完整 作废
+    if (i >= UART_BUFFER_SIZE || UART_Manage_Object->Rx_Buffer[i] != '#')
+    {
+        Variable_Index = -1;
+        Variable_Value = 0.0f;
+        return;
+    }
     //如果有小数点则考虑
     if (tmp_dot_flag != 0)
     {

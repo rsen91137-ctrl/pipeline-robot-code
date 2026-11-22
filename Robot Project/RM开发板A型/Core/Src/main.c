@@ -84,13 +84,7 @@ float Robot_Target_Distance, Robot_Now_Distance, Robot_Target_Speed, Robot_Now_S
 
 /* Latest received laser distance in mm; -1 means invalid or not yet received. */
 
-volatile float Rotation_Measured_Distance_mm; //L432KC开发板测距返回数据
-
-uint32_t Counter;
-
-uint8_t Online; //在线标志位
-
-uint8_t OfflineFlag;
+volatile float Rotation_Measured_Distance_mm = -1.0f; //L432KC开发板测距返回数据
 
 const char *msg;
 
@@ -131,87 +125,27 @@ void UART_Serialplot_Call_Back(uint8_t *Buffer, uint16_t Length)
  } 
 
 /**
- * @brief 测距部分返回数据处理代码
+ * @brief 测距部分返回数据处理 USART6接收中断里调用
+ *        L432KC发来的是6字节二进制帧(帧头 采样序号 ADC原始值 校验) 格式见Scan_Sync.h
+ *        解析、还原采样时刻、配上当时的转角和里程 都在同步模块里完成
  * 
- * @param Rotation_Measured_Distance_mm 测距数据存入该变量
- * @param Length 
+ * @param Buffer 接收缓冲区
+ * @param Length 本次收到的字节数
  */
 
 void R_D_M_Data_Processing(uint8_t *Buffer, uint16_t Length)
 {
-    /* Ignore DMA half-transfer events; IDLE/TC returns the complete prefix. */
-    static char line[ROTATION_DIS_MEASURE_DATA_MAX_LENGTH];
-    static uint16_t line_length = 0;
-    static uint8_t discard_line = 0;
-    static uint8_t uart2_tx_buffer[ROTATION_DIS_MEASURE_DATA_MAX_LENGTH + 1];
-    uint8_t pending_frame[ROTATION_DIS_MEASURE_DATA_MAX_LENGTH + 1];
-    uint16_t pending_length = 0;
-    uint16_t i;
+    uint32_t Arrival_Time_us = Robot_Get_Time_us(); //先记下到达时刻 越早取越准
 
+    /* DMA半满事件时接收还在进行 忽略 等空闲或收满时一次处理整段 */
     if (Buffer == NULL || huart6.RxState != HAL_UART_STATE_READY)
     {
         return;
     }
 
-    for (i = 0; i < Length; ++i)
-    {
-        char ch = (char)Buffer[i];
-        if (ch == '\n')
-        {
-            if (!discard_line && line_length > 0 && line[line_length - 1] == '\r')
-            {
-                uint16_t n = line_length - 1;
-                uint8_t valid_frame = 0;
-                if (n == 6 && memcmp(line, "-1.000", 6) == 0)
-                {
-                    Rotation_Measured_Distance_mm = -1.0f;
-                    valid_frame = 1;
-                }
-                else if (n >= 5 && n <= 8 && line[n - 4] == '.')
-                {
-                    uint32_t value = 0;
-                    uint16_t j;
-                    uint8_t valid = 1;
-                    for (j = 0; j < n; ++j)
-                    {
-                        if (j == n - 4) continue;
-                        if (line[j] < '0' || line[j] > '9')
-                        {
-                            valid = 0;
-                            break;
-                        }
-                        value = value * 10U + (uint32_t)(line[j] - '0');
-                    }
-                    if (valid)
-                    {
-                        Rotation_Measured_Distance_mm = (float)value / 1000.0f;
-                        valid_frame = 1;
-                    }
-                }
-                if (valid_frame)
-                {
-                    /* Preserve the latest complete ASCII frame, including CRLF. */
-                    memcpy(pending_frame, line, line_length);
-                    pending_frame[line_length] = '\n';
-                    pending_length = line_length + 1;
-                }
-            }
-            line_length = 0;
-            discard_line = 0;
-        }
-        else if (!discard_line)
-        {
-            if (line_length < sizeof(line)) line[line_length++] = ch;
-            else discard_line = 1;
-        }
-    }
+    Scan_Sync_Rx_Data(Buffer, Length, Arrival_Time_us);
 
-    /* USART2 DMA needs a persistent buffer until transmission completes. */
-    /*if (pending_length != 0 && !IfPlotSending && huart2.gState == HAL_UART_STATE_READY)
-    {
-        memcpy(uart2_tx_buffer, pending_frame, pending_length);
-        UART_Send_Data(&huart2, uart2_tx_buffer, pending_length);
-    }*/
+    Rotation_Measured_Distance_mm = Scan_Sync_Get_Last_Distance_mm();
 }
 
 /* USER CODE END 0 */
@@ -278,6 +212,8 @@ int main(void)
   MX_SDIO_SD_Init();
   MX_FATFS_Init();
     
+  Scan_Sync_Init(); //同步模块要在串口和CAN开始接收之前初始化
+
   Dictionary_Define(serialplot);
   UART_Init(&huart2, UART_Serialplot_Call_Back, SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH); //机器人控制串口
   UART_Init(&huart6, R_D_M_Data_Processing, ROTATION_DIS_MEASURE_DATA_MAX_LENGTH); //两块开发板沟通的通信模块连接
@@ -302,8 +238,6 @@ int main(void)
 
   HAL_GPIO_WritePin(GPIOG,GPIO_PIN_13,GPIO_PIN_SET);
 
-  Start_Synchornize();
-
   //Structure_Init(Tube_Radius , Extra_Angle); //调零与结构自适应 调整PID参数时注释
 
   /* USER CODE END 2 */
@@ -317,18 +251,25 @@ int main(void)
 
         // Robot_Move_Distance_Control(Robot_Target_Distance,MOTOR_WHEEL_OMEGA_RATIO,RADIUS,motor);
         
+        //四个电机先各自算PID 再统一发一次CAN
         Forward_PID_Processing(motor);
 
         Rotate_PID_Processing(motor2);
 
         Angle_Adjusting_PID_Processing(motor3);
         Angle_Adjusting_PID_Processing(motor4);
+
+        Motor_CAN_Send_Processing();
+
+        Structure_Init_Processing(); //调零与卡紧的执行
+
+        Robot_Test_Scan_Data_Processing(); //测点取出与回传
       
         Robot_Test_Serialplot_Plot(serialplot , motor , motor2 , motor3 , motor4 , MOTOR_WHEEL_OMEGA_RATIO , RADIUS);
 
         Robot_Offline_Detection();
 
-        HAL_Delay(0);
+        HAL_Delay(0); //等到下一个1ms节拍 PID里的时间步长D_T按1ms算 所以循环体必须在1ms内跑完
     
     /* USER CODE END WHILE */
 

@@ -632,6 +632,11 @@
               <FilePath>..\User\Robot_Control.c</FilePath>
             </File>
             <File>
+              <FileName>Scan_Sync.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\User\Scan_Sync.c</FilePath>
+            </File>
+            <File>
               <FileName>Robot_Test.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\User\Robot_Test.c</FilePath>

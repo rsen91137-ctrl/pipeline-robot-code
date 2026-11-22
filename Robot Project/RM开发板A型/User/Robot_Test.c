@@ -78,7 +78,8 @@ void Dictionary_Define(Class_Serialplot &serialplot){
 
 };
 
-    serialplot.Init(&huart2, 46, (char **)Variable_Assignment_List);
+    //命令条数由数组大小自动算出 原来手写46 增删命令时容易忘改
+    serialplot.Init(&huart2, sizeof(Variable_Assignment_List) / sizeof(Variable_Assignment_List[0]), (char **)Variable_Assignment_List);
     
 
 }
@@ -104,6 +105,14 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
     float *Robot_Target_Distance,
     float *Rotate_Target_Speed,
     float *Rotate_Target_Angle){
+
+    //在本次收到的数据后面补0 解析时就不会读到上一条指令留在缓冲区里的内容
+    //否则一个噪声字节盖掉旧指令的第一个字符 剩下的部分可能被当成新指令再执行一遍
+    if(Length < UART_BUFFER_SIZE){
+
+        Buffer[Length] = 0;
+
+    }
 
     serialplot.UART_RxCpltCallback(Buffer);
     switch (serialplot.Get_Variable_Index())
@@ -209,20 +218,20 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         case(18): // 3508modechange
         {
             if(serialplot.Get_Variable_Value() == 0){
-                motor.Set_Control_Method(Control_Method_OMEGA);
+                Motor_Set_Control_Method(M3508 , Control_Method_OMEGA);
             }
             else if(serialplot.Get_Variable_Value() == 1){
-                motor.Set_Control_Method(Control_Method_ANGLE);
+                Motor_Set_Control_Method(M3508 , Control_Method_ANGLE);
             }
         }
         break;
         case(19): // 6020modechange
         {
             if(serialplot.Get_Variable_Value() == 0){
-                motor2.Set_Control_Method(Control_Method_OMEGA);
+                Motor_Set_Control_Method(GM6020 , Control_Method_OMEGA);
             }
             else if(serialplot.Get_Variable_Value() == 1){
-                motor2.Set_Control_Method(Control_Method_ANGLE);
+                Motor_Set_Control_Method(GM6020 , Control_Method_ANGLE);
             }
         }
         break;
@@ -274,10 +283,10 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         case(29): // M2006modechange
         {
             if(serialplot.Get_Variable_Value() == 0){
-                motor3.Set_Control_Method(Control_Method_OMEGA);
+                Motor_Set_Control_Method(M2006_Front , Control_Method_OMEGA);
             }
             else if(serialplot.Get_Variable_Value() == 1){
-                motor3.Set_Control_Method(Control_Method_ANGLE);
+                Motor_Set_Control_Method(M2006_Front , Control_Method_ANGLE);
             }
         }
         break;
@@ -317,9 +326,11 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(35):{
 
-            if(motor.Get_Now_Omega() < LIMIT){
+            //命令的数值就是管道半径 单位米 例如 initialize=0.075#
+            //原来传进去的是轮子半径RADIUS 且只判了速度上限 机器人倒着走时也会执行
+            if(motor.Get_Now_Omega() < LIMIT && motor.Get_Now_Omega() > -LIMIT){
 
-                Structure_Init(RADIUS,EXTRA);
+                Structure_Init(serialplot.Get_Variable_Value(),EXTRA);
 
             }
 
@@ -350,7 +361,7 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
         break;
         case(39):{
 
-            Online = 1;//如果没有断连 每5秒自动调整一次到1
+            Robot_Online_Feed(); //上位机每5秒发一次 刷新心跳时刻
 
         }
         break;
@@ -399,14 +410,26 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
 
 /**
  * @brief 开启serilaplot绘图
+ *        每PLOT_PERIOD_MS发一帧 且只在上一帧发完后才填下一帧
+ *        原来每个循环都重填发送缓冲区 而上一帧还在用DMA往外发 会把正在发的数据改掉
  * 
  */
 
 void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4 , float Wheel_Omega_Ratio , float Wheel_Radius){
 
+    static uint32_t Last_Plot_Tick = 0;
+
     if(IfPlotSending && !IfsychroDataSending){
 
-    float Robot_Target_Speed, Robot_Now_Speed,Rotate_Target_Speed, Rotate_Now_Speed, Robot_Target_Distance, Robot_Now_Distance, motor3_Target_Omega , motor3_Now_Omega ,motor3_Target_Revolutions, motor3_Now_Revolutions/* motor4_Target_Revolutions, motor4_Now_Revolutions*/;
+    if(HAL_GetTick() - Last_Plot_Tick < PLOT_PERIOD_MS || huart2.gState != HAL_UART_STATE_READY){
+
+        return;
+
+    }
+
+    Last_Plot_Tick = HAL_GetTick();
+
+    float Robot_Target_Speed, Robot_Now_Speed,Rotate_Target_Speed, Rotate_Now_Speed;
 
     Robot_Target_Speed = motor.Get_Target_Omega() * Wheel_Radius / Wheel_Omega_Ratio;
     Rotate_Target_Speed = motor2.Get_Target_Omega() * RADS_TO_RPM;
@@ -414,29 +437,92 @@ void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 
     Robot_Now_Speed = Get_Robot_Now_Speed(motor, Wheel_Omega_Ratio , Wheel_Radius);
     Rotate_Now_Speed = Get_Rotate_Now_Speed(motor2);
 
-    Robot_Target_Distance = Robot_Move_Target_Delta_Distance;   // 显示 ta（本次要走的距离）
-    Robot_Now_Distance = (motor.Get_Now_Angle() - Robot_Move_Start_Angle) * Wheel_Radius / Wheel_Omega_Ratio;    // 从指令起点累计的当前距离
-
-    motor3_Target_Omega = motor3.Get_Target_Omega() * RADS_TO_RPM;
-    motor3_Now_Omega = motor3.Get_Now_Omega() * RADS_TO_RPM;
-    
-    motor3_Target_Revolutions = motor3_Target_Delta_Revolutions; // 显示本次要旋转的圈数
-    motor3_Now_Revolutions = (motor3.Get_Now_Angle() - motor3_Start_Angle) / (2 * PI); // 从指令起点累计的当前圈数
-    //motor4_Target_Revolutions = motor4_Target_Delta_Revolutions; // 显示本次要旋转的圈数
-    //motor4_Now_Revolutions = (motor4.Get_Now_Angle() - motor4_Start_Angle) / (2 * PI); // 从指令起点累计的当前圈数
-
-    serialplot.Set_Data(5,&Robot_Target_Speed, &Robot_Now_Speed, &motor.TotalDistance , &Rotate_Target_Speed, &Rotate_Now_Speed /*, &Robot_Target_Distance, &motor3_Target_Omega , &motor3_Now_Omega ,&motor3_Target_Revolutions, &motor3_Now_Revolutions*/ /*,&motor4_Target_Revolutions, motor4_Now_Revolution*/ );
+    serialplot.Set_Data(5,&Robot_Target_Speed, &Robot_Now_Speed, &motor.TotalDistance , &Rotate_Target_Speed, &Rotate_Now_Speed);
     serialplot.TIM_Write_PeriodElapsedCallback();
 
     TIM_UART_PeriodElapsedCallback();
 
     }
-    else if(IfsychroDataSending && !IfPlotSending){
 
-        //传回当前时刻的机器人里程坐标,电机角度,以及测距仪数值 方便建立三维极坐标系
+}
+
+/**
+ * @brief 测点处理 放在主循环 每个循环都要调用
+ *        把同步模块配好的测点(序号, θ, ρ, x)取出来 开启实时建模时抽稀后回传上位机
+ *
+ *        回传帧格式(小端):
+ *          字节0      帧头 0xAC
+ *          字节1      本帧测点数 N
+ *          之后N×12字节  每个测点: 序号uint32 θ uint16(0~65535为一圈) ρ uint16(微米 0为无效) x float32(米)
+ *          最后1字节  校验 = 前面所有字节求和后按位取反
+ *
+ *        完整数据应写SD卡 这里的无线回传只用于实时预览
+ * 
+ */
+
+void Robot_Test_Scan_Data_Processing(void){
+
+    static uint8_t Pending[SCAN_UPLINK_RECORDS_PER_FRAME * sizeof(Struct_Scan_Record)]; //攒够一帧再发
+    static uint8_t Pending_Count = 0;
+    static uint8_t Decimation_Count = 0;
+
+    Struct_Scan_Record Record;
+    uint8_t Sending = (IfsychroDataSending && !IfPlotSending);
+
+    //测点必须一直取走 否则缓冲区满了之后新的测点进不来
+    while(Scan_Sync_Pop_Record(&Record)){
+
+        if(!Sending || Pending_Count >= SCAN_UPLINK_RECORDS_PER_FRAME){
+
+            continue; //没开回传 或上一帧还没发出去 丢弃
+
+        }
+
+        Decimation_Count++;
+
+        if(Decimation_Count < SCAN_UPLINK_DECIMATION){
+
+            continue;
+
+        }
+
+        Decimation_Count = 0;
+
+        memcpy(&Pending[Pending_Count * sizeof(Struct_Scan_Record)], &Record, sizeof(Struct_Scan_Record));
+        Pending_Count++;
 
     }
 
-        
+    if(!Sending){
+
+        Pending_Count = 0;
+        return;
+
+    }
+
+    if(Pending_Count >= SCAN_UPLINK_RECORDS_PER_FRAME && huart2.gState == HAL_UART_STATE_READY){
+
+        uint8_t *Tx = UART2_Manage_Object.Tx_Buffer;
+        uint16_t Length = 2 + Pending_Count * sizeof(Struct_Scan_Record);
+        uint8_t Sum = 0;
+        uint16_t i;
+
+        Tx[0] = SCAN_UPLINK_FRAME_HEADER;
+        Tx[1] = Pending_Count;
+        memcpy(&Tx[2], Pending, Pending_Count * sizeof(Struct_Scan_Record));
+
+        for(i = 0; i < Length; i++){
+
+            Sum = (uint8_t)(Sum + Tx[i]);
+
+        }
+
+        Tx[Length] = (uint8_t)(~Sum);
+
+        UART_Send_Data(&huart2, Tx, Length + 1);
+
+        Pending_Count = 0;
+
+    }
 
 }

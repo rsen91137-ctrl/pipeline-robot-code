@@ -37,4 +37,6 @@ void Robot_Test_Serialplot_Call_Back_Configuration(uint8_t *Buffer,
     
 void Robot_Test_Serialplot_Plot(Class_Serialplot &serialplot , Class_Motor_C620 &motor , Class_Motor_GM6020 &motor2 , Class_Motor_C610 &motor3 , Class_Motor_C610 &motor4 , float Wheel_Omega_Ratio , float Wheel_Radius);
 
+void Robot_Test_Scan_Data_Processing(void); //测点取出与回传 放在主循环
+
 #endif

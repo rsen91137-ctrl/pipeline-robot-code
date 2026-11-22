@@ -6,6 +6,15 @@
 #define BUFFER_SIZE 256
 #define COMMAND_MAX_SIZE 100
 
+/* 发给主控的测距帧 必须与主控工程 Scan_Sync.h 里的定义一致
+ * 字节0     帧头 0xA5
+ * 字节1~2   采样序号 uint16 小端 每次采样加1 溢出回0
+ * 字节3~4   ADC原始值 uint16 小端 (12位)
+ * 字节5     校验 = 前5字节求和后按位取反
+ */
+#define SCAN_FRAME_HEADER 0xA5
+#define SCAN_FRAME_LENGTH 6
+
 typedef void (*UART_Callback_Function)(uint8_t* Buffer , uint16_t Length); //UART接收自定义数据处理函数
 
 typedef struct //UART信息处理结构体

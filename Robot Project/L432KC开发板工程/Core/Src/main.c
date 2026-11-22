@@ -33,8 +33,9 @@
 /* USER CODE BEGIN PV */
 
 volatile uint16_t adc_raw = 0;       // DMA 写入的原始值
+volatile uint16_t sample_raw = 0;    // 采样完成中断里锁存的本次采样值
+volatile uint16_t sample_seq = 0;    // 采样序号 每次采样加1 主控靠它还原采样时刻、发现丢点
 volatile uint8_t adc_ready = 0;      // 新数据标志
-volatile float distance = -1.0f;     // 毫米；-1 表示尚无有效结果
 
 /* USER CODE END PV */
 
@@ -154,70 +155,45 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    // uint8_t data = '0';
-    /* USER CODE BEGIN WHILE */
-while (1)
-{
-    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
-    if(ifsend){ //是否发送
+    /*
+     * 每个采样只发一帧 带上采样序号
+     * 原来是串口一空就把最新的距离发出去 同一个采样可能发多次 也可能跳过 主控分不清
+     * 现在发ADC原始值 换算成距离放到主控做: 6字节帧发完只要0.52ms 赶得上1ms一次的采样
+     * 如果上一帧还没发完 这个采样留到下一圈循环 来不及就被新采样覆盖 主控从序号跳变能看出来
+     */
+    if (ifsend && adc_ready && huart1.gState == HAL_UART_STATE_READY)
+    {
+      static uint8_t tx_frame[SCAN_FRAME_LENGTH];
+      uint16_t raw;
+      uint16_t seq;
+      uint8_t sum = 0;
+      uint8_t i;
 
-      if (adc_ready)
+      /* 序号和采样值要成对取出 中间不能被采样中断打断 */
+      __disable_irq();
+      raw = sample_raw;
+      seq = sample_seq;
+      adc_ready = 0;
+      __enable_irq();
+
+      tx_frame[0] = SCAN_FRAME_HEADER;
+      tx_frame[1] = (uint8_t)(seq & 0xFF);
+      tx_frame[2] = (uint8_t)(seq >> 8);
+      tx_frame[3] = (uint8_t)(raw & 0xFF);
+      tx_frame[4] = (uint8_t)(raw >> 8);
+
+      for (i = 0; i < SCAN_FRAME_LENGTH - 1; i++)
       {
-          uint16_t sample;
-          float adc_voltage;
-          float sensor_voltage;
-
-          adc_ready = 0;
-
-        /* 读取本次最新采样值 */
-          sample = adc_raw;
-
-        /* ADC 原始值转换为 PA0 引脚电压 */
-          adc_voltage = (float)sample * 3.3f / 4095.0f;
-
-        /* 恢复 12 kΩ 上臂、18 kΩ 下臂分压前的电压 */
-          sensor_voltage = adc_voltage * (30.0f / 18.0f);
-
-        /*
-         * 传感器报警输出约为 5.2V，
-         * 暂用 5.1V 作初步报警判断。
-         */
-          if (sensor_voltage > 5.1f)
-          {
-            distance = -1.0f;
-          }
-          else
-          {
-            /* HG-C1050：Normal 模式，单位 mm */
-            distance = 65.0f - 6.0f * sensor_voltage;
-          }
+        sum = (uint8_t)(sum + tx_frame[i]);
       }
 
-      static char tx_buffer[32];
+      tx_frame[5] = (uint8_t)(~sum);
 
-      if (huart1.gState == HAL_UART_STATE_READY)
-      {
-
-        int len = snprintf(tx_buffer, sizeof(tx_buffer), "%.3f\r\n", (double)distance);
-
-        if (len > 0 && len < (int)sizeof(tx_buffer))
-
-        {
-
-             UART_Send_Data(&huart1, (uint8_t *)tx_buffer, (uint16_t)len);
-
-        }
+      UART_Send_Data(&huart1, tx_frame, SCAN_FRAME_LENGTH);
     }
-
-    }
-
-}
-/* USER CODE END 3 */
-    // UART_Send_Data(&huart1, &data, 1);
-    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
@@ -278,6 +254,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     if (hadc->Instance == ADC1)
     {
+        sample_raw = adc_raw; //立刻锁存 下一次采样会覆盖adc_raw
+        sample_seq++;
         adc_ready = 1;
     }
 }
