@@ -96,15 +96,22 @@ class Editor:
                 for r in b.get('refs', []): self.tears.setdefault(r, []).append(i)
         self.labels = []                      # (层, 文字, 外框, 笔画)
         # 已有走线端点和过孔中心的精确坐标(mil). 新线接到它们上面时直接用原值, 不经过毫米换算, 免得端点之间出现零点几微米的错位
-        self.known = []
-        for h, b, i in self.prj.pcb['rows']:
-            if h['type'] == 'LINE': self.known += [(b['startX'], b['startY']), (b['endX'], b['endY'])]
-            elif h['type'] == 'VIA': self.known.append((b['centerX'], b['centerY']))
+        self._known = None                    # 每次删线/改线后作废, 用到时按当前还存在的走线和过孔重建
+
+    def known(self):
+        if self._known is None:
+            self._known = []
+            rows = [self.lines[i] for _, _, i in self.prj.pcb['rows']] + self.new
+            for l in rows:
+                if not l or not l.startswith(('{"type":"LINE"', '{"type":"VIA"')): continue
+                b = json.loads(l.partition('||')[2].rstrip('|'))
+                self._known += [(b['startX'], b['startY']), (b['endX'], b['endY'])] if 'startX' in b else [(b['centerX'], b['centerY'])]
+        return self._known
 
     def mil(self, x, y, snap=True):
         mx, my = self.prj.ox + x / MIL, self.prj.oy - y / MIL
-        if snap and self.known:
-            p = min(self.known, key=lambda p: abs(p[0] - mx) + abs(p[1] - my))
+        if snap and self.known():
+            p = min(self.known(), key=lambda p: abs(p[0] - mx) + abs(p[1] - my))
             if math.hypot(p[0] - mx, p[1] - my) < 0.04: return p          # 0.04mil = 1微米以内视为同一点
         return (num(mx), num(my))
 
@@ -119,7 +126,7 @@ class Editor:
             if i not in self.ids: break
         self.ids.add(i)
         head = json.dumps({'type': typ, 'ticket': self.ticket, 'id': i}, separators=(',', ':')); self.ticket += 1
-        self.new.append(head + '||' + json.dumps(body, ensure_ascii=False, separators=(',', ':')) + '|'); return i
+        self.new.append(head + '||' + json.dumps(body, ensure_ascii=False, separators=(',', ':')) + '|'); self._known = None; return i
 
     def _drop_tears(self, i):
         for row in self.tears.get(i, []): self.lines[row] = None
@@ -132,12 +139,12 @@ class Editor:
         def fn(b):       # 没挪的那一头原样保留
             if math.dist(a0, a1) > 1e-6: b['startX'], b['startY'] = self.mil(*a1)
             if math.dist(b0, b1) > 1e-6: b['endX'], b['endY'] = self.mil(*b1)
-        self._edit(l['row'], fn); self._drop_tears(lid)
+        self._edit(l['row'], fn); self._drop_tears(lid); self._known = None
         self.log.append(f"改线 {l['net']} 层{l['layer']} ({a0[0]},{a0[1]})->({b0[0]},{b0[1]})  =>  ({a1[0]},{a1[1]})->({b1[0]},{b1[1]})")
 
     def remove(self, *ids):
         for i in ids:
-            it = self.item[i]; self.lines[it['row']] = None; self._drop_tears(i)
+            it = self.item[i]; self.lines[it['row']] = None; self._drop_tears(i); self._known = None
             self.log.append((f"删线 {it['net']} 层{it['layer']} ({it['a'][0]:.2f},{it['a'][1]:.2f})->({it['b'][0]:.2f},{it['b'][1]:.2f})" if 'a' in it
                              else f"删过孔 {it['net']} ({it['p'][0]:.2f},{it['p'][1]:.2f})"))
 
@@ -288,11 +295,11 @@ def apply_fixes(ed):
     """走线优化. 每一条的原因见 Hardware/布线检查报告.md"""
     # 1. 升压芯片U3的输入脚(5脚IN 4脚EN)原来靠一条20mm长的底层线从TP2供电, 身边的去耦电容C4反而没有直接连到它.
     #    改成: C4 -> U3.5 -> U3.4 在顶层直接相连(2.6mm), 删掉底层那条长线和3个打在焊盘上的过孔, 底层地平面恢复完整
-    ed.add_line('+5V', TOP, (34.990, 11.430), (37.586, 11.430), 16)
-    ed.add_line('+5V', TOP, (37.586, 11.430), (37.586, 10.480), 12)
     ed.remove('4b0e51bb68044917', '7098e47507dab3c3', 'ee51bab9e1fee759', 'c9f9e85b78608eb7', '0fcf24f57bc7c5ab',
               'b40337b2bd859045', '71999d78950b7da0', '263aa91c180883ed')
-    # 2. 单片机U1底部的接地焊盘原来没有过孔, 只靠顶层细铜皮接地. 加3个过孔直通底层地(位置避开了底层的DBG_RX线)
+    ed.add_line('+5V', TOP, (34.990, 11.430), (37.586, 11.430), 16)
+    ed.add_line('+5V', TOP, (37.586, 11.430), (37.586, 10.480), 12)
+    # 2. 单片机U1底部的接地焊盘原来没有过孔, 只靠顶层细铜皮接地. 加3个过孔直通底层地(位置避开了底层的DBG_RX线). 只是电气上接地更结实, 孔太小不能用来从背面灌锡
     for x in (22.9, 24.0, 25.1): ed.add_via('GND', x, 42.35)
     # 3. 顶层 DBG_TX 出线左移0.13mm: 它和ADC2的间距原来只有0.105mm(规则下限0.102), 改后0.197mm
     ed.move('389238168ddaf2a1', (26.490, 39.550), (27.125, 39.550), (26.490, 39.550), (26.995, 39.550))
@@ -319,6 +326,10 @@ def apply_fixes(ed):
     #    竖线贴着C3 D3的焊盘边走(x=46.75): 中间不留缝, 重铺铜时这里就不会夹出一条又细又长的死胡同地铜皮
     pts = [(45.493, 10.000), (46.250, 10.000), (46.750, 10.500), (46.750, 15.000), (46.250, 15.500), (44.825, 15.500), (43.900, 16.425)]
     for a, b in zip(pts, pts[1:]): ed.add_line('+12V', TOP, a, b, 30)
+    # 7. 顶层 UART_RX 竖线右移0.08mm: 它离U4第1脚(3V3)焊盘原来是0.152mm, 正好压在"线到焊盘"规则的下限上, EDA的DRC可能因为舍入报错. 改后0.23mm
+    ed.move('7165f251d6bce044', (20.574, 41.021), (19.759, 40.206), (20.574, 41.021), (19.839, 40.286))
+    ed.move('b73c007ee46b9241', (19.759, 40.206), (19.759, 26.089), (19.839, 40.286), (19.839, 26.169))
+    ed.move('6d1eec595b0377a4', (19.759, 26.089), (19.505, 25.835), (19.839, 26.169), (19.505, 25.835))
 
 
 def add_ground_vias(ed):
