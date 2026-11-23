@@ -7,10 +7,13 @@
   3. 给连接器 测试点 按键加引脚名丝印 (用丝印层折线画出的笔画字)
   4. 删掉重复的铺铜区 清空铺铜填充 —— 导入后必须重建铺铜(Shift+B)
 
-用法: python3 pcbfix.py 输入.epro2 输出.epro2 [预览图目录]
+用法: python3 pcbfix.py 输入.epro2 输出.epro2 [预览图目录] [--no-pour]
+      --no-pour: 把铺铜区整个删掉(备用: 万一清空填充的文件导入不了, 用这个版本, 导入后自己重画两块整板GND铺铜)
 坐标约定: 毫米, 原点在板子左上角, y向下 (与 pcbreview.py 的 geometry.json 一致)
 """
 import sys, os, io, json, math, random, zipfile
+import numpy as np
+from scipy import ndimage as ndi
 import pcbreview as RV
 from pcbreview import MIL, TOP, BOT
 from PIL import Image, ImageDraw
@@ -42,7 +45,7 @@ FONT = {
     '+': [[(0.5, 3), (3.5, 3)], [(2, 1.3), (2, 4.7)]],
     '-': [[(0.5, 3), (3.5, 3)]],
 }
-CHAR_W, CHAR_ADV = 4.0, 5.3          # 字宽 字间距(格)
+CHAR_W, CHAR_ADV = 4.0, 6.2          # 字宽 字间距(格). 间距6.2格: 1mm字高时相邻两字笔画之间净空0.21mm, 印出来不会粘在一起
 
 def text_size(s, h):
     u = h / 6.0
@@ -65,6 +68,11 @@ def text_box(s, cx, cy, h, rot=0):
     W = text_size(s, h)
     return (cx - W / 2, cy - h / 2, cx + W / 2, cy + h / 2) if rot % 180 == 0 else (cx - h / 2, cy - W / 2, cx + h / 2, cy + W / 2)
 
+def num(v):
+    """写进文件的数: 保留4位小数, 整数不带小数点(和EDA自己写的格式一致)"""
+    r = round(v, 4)
+    return int(r) if r == int(r) else r
+
 def hit(a, b, gap=0.0):
     return a[0] - gap < b[2] and b[0] - gap < a[2] and a[1] - gap < b[3] and b[1] - gap < a[3]
 
@@ -84,7 +92,7 @@ class Editor:
                 for r in b.get('refs', []): self.tears.setdefault(r, []).append(i)
         self.labels = []                      # (层, 文字, 外框, 笔画)
 
-    def mil(self, x, y): return (round(self.prj.ox + x / MIL, 4), round(self.prj.oy - y / MIL, 4))
+    def mil(self, x, y): return (num(self.prj.ox + x / MIL), num(self.prj.oy - y / MIL))
 
     def _edit(self, row, fn):
         head, _, body = self.lines[row].partition('||'); tail = '|' if body.endswith('|') else ''
@@ -131,6 +139,83 @@ class Editor:
                           "unusedInnerLayers": [], "propagationDelay": 0})
         self.log.append(f"加过孔 {net} ({x},{y})")
 
+    # ---- 自动找位置加地过孔 ----
+    def prepare(self):
+        """算出每层上 离非GND铜皮/离焊盘/离板边 的距离图, 供找过孔位置用"""
+        rb = self.rb; rb.build(); PX = RV.PX; self.d_other = {}; self.d_pad = {}
+        for layer in (TOP, BOT):
+            other = np.zeros((rb.M, rb.N), bool)
+            for n, m in rb.masks[layer].items():
+                if n != 'GND': other |= m
+            self.d_other[layer] = ndi.distance_transform_edt(~other) / PX
+            im = rb._canvas(); d = ImageDraw.Draw(im)
+            for q in rb.pads:
+                if layer == TOP or q['th']: rb._draw_pad(d, q)
+            self.d_pad[layer] = ndi.distance_transform_edt(~np.array(im, bool)) / PX
+        self.d_edge = rb.edge_distance(); self.via_pts = [v['p'] for v in rb.vias]
+        self.pad_bbox = {}                     # 每个元件所有焊盘的外接框: 过孔不打在元件肚子底下(两个焊盘之间)
+        for q in rb.pads:
+            b = self.pad_bbox.get(q['ref'], (9e9, 9e9, -9e9, -9e9))
+            self.pad_bbox[q['ref']] = (min(b[0], q['x'] - q['w'] / 2), min(b[1], q['y'] - q['h'] / 2), max(b[2], q['x'] + q['w'] / 2), max(b[3], q['y'] + q['h'] / 2))
+
+    def via_ok(self, x, y, clear=0.25, pad_gap=0.2, pitch=0.9, r=0.305):
+        """(x,y)能不能打一个地过孔: 两层都离别的网络>=clear 不压任何焊盘 离别的过孔>=pitch 离板边>=1mm 不压丝印字"""
+        PX = RV.PX; i, j = int(y * PX), int(x * PX)
+        if not (0 <= i < self.rb.M and 0 <= j < self.rb.N) or self.d_edge[i, j] < 1.0: return False
+        for layer in (TOP, BOT):
+            if self.d_other[layer][i, j] < r + clear or self.d_pad[layer][i, j] < r + pad_gap: return False
+        if any(hit((x - r, y - r, x + r, y + r), b, 0.15) for _, _, b, *_ in self.labels): return False
+        if any(hit((x - r, y - r, x + r, y + r), b) for b in self.pad_bbox.values()): return False
+        return all(math.dist((x, y), p) >= pitch for p in self.via_pts)
+
+    def track_ok(self, a, b, w, layer, clear=0.2):
+        n = max(2, int(math.dist(a, b) / 0.05) + 1); PX = RV.PX
+        for k in range(n + 1):
+            x = a[0] + (b[0] - a[0]) * k / n; y = a[1] + (b[1] - a[1]) * k / n
+            if self.d_other[layer][int(y * PX), int(x * PX)] < w / 2 + clear: return False
+        return True
+
+    def gnd_via_near(self, target, why, pad=None, w_mil=12, reach=1.5, grid=0.127):
+        """在target附近找最近的合法位置打一个地过孔. pad=(x,y): 再从这个焊盘拉一条顶层地线连过去,
+        这时过孔只在焊盘的 横/竖/45度 八个方向上找, 连线才规整; 不带pad时对齐5mil网格"""
+        best = None
+        if pad:
+            for k in range(8):
+                ux, uy = math.cos(k * math.pi / 4), math.sin(k * math.pi / 4); t = 0.5
+                while t <= reach + 1.0:
+                    x, y = round(pad[0] + ux * t, 3), round(pad[1] + uy * t, 3); d = math.dist((x, y), target); t += 0.05
+                    if d > reach or (best and d >= best[0]) or not self.via_ok(x, y) or not self.track_ok(pad, (x, y), w_mil * MIL, TOP): continue
+                    best = (d, x, y)
+        else:
+            n = int(reach / grid); gx0, gy0 = round(target[0] / grid), round(target[1] / grid)
+            for ix in range(gx0 - n, gx0 + n + 1):
+                for iy in range(gy0 - n, gy0 + n + 1):
+                    x, y = ix * grid, iy * grid; d = math.dist((x, y), target)
+                    if d > reach or (best and d >= best[0]) or not self.via_ok(x, y): continue
+                    best = (d, round(x, 3), round(y, 3))
+        if not best: self.log.append(f"!! {why}: 在({target[0]},{target[1]})附近{reach}mm内找不到能打地过孔的位置, 跳过"); return None
+        _, x, y = best; self.add_via('GND', x, y); self.via_pts.append((x, y)); self.log[-1] += f"  [{why}]"
+        if pad: self.add_line('GND', TOP, pad, (x, y), w_mil)
+        return (x, y)
+
+    def gnd_vias_in(self, box, k, why, spacing=2.0, grid=0.635):
+        """在矩形区域里均匀补k个地过孔: 每次选离所有已有过孔最远的合法位置"""
+        x0, y0, x1, y1 = box; cand = []
+        for ix in range(int(math.ceil(x0 / grid)), int(x1 / grid) + 1):
+            for iy in range(int(math.ceil(y0 / grid)), int(y1 / grid) + 1):
+                x, y = round(ix * grid, 3), round(iy * grid, 3)
+                if self.via_ok(x, y): cand.append((x, y))
+        done = []
+        for _ in range(k):
+            best = None
+            for c in cand:
+                d = min(math.dist(c, p) for p in self.via_pts)
+                if d >= spacing and (best is None or d > best[0]): best = (d, c)
+            if not best: break
+            x, y = best[1]; self.add_via('GND', x, y); self.via_pts.append((x, y)); self.log[-1] += f"  [{why}]"; done.append((x, y))
+        if len(done) < k: self.log.append(f"!! {why}: 只找到{len(done)}个合法位置(想加{k}个)")
+        return done
+
     # ---- 丝印 ----
     def hide_designators(self):
         n = 0
@@ -153,25 +238,30 @@ class Editor:
         self.labels.append((layer, s, text_box(s, cx, cy, h, rot), strokes, h, rot))
 
     # ---- 铺铜 ----
-    def pours(self, drop=()):
+    def pours(self, drop=(), drop_all=False):
         gone = set()
         for h, b, i in self.prj.pcb['rows']:
-            if h['type'] == 'POUR' and b.get('name') in drop:
-                self.lines[i] = None; gone.add(h['id']); self.log.append(f"删除重复铺铜区 {b.get('name')} (层{b['layerId']} {b['netName']})")
+            if h['type'] == 'POUR' and (drop_all or b.get('name') in drop):
+                self.lines[i] = None; gone.add(h['id'])
+                self.log.append(f"删除{'重复' if b.get('name') in drop else ''}铺铜区 {b.get('name')} (层{b['layerId']} {b['netName']})")
         for h, b, i in self.prj.pcb['rows']:
             if h['type'] == 'POURED':
                 if json.loads(h['id'])[1] in gone: self.lines[i] = None
                 else:
                     def fn(b): b['pourFill'] = []
                     self._edit(i, fn)
-        self.log.append("清空铺铜填充数据: 导入后必须重建铺铜")
+        self.log.append("铺铜区已全部删除: 导入后要自己重画顶层 底层两块整板GND铺铜" if drop_all else "清空铺铜填充数据: 导入后必须重建铺铜")
 
     def save(self, out):
-        last = max(l['row'] for l in self.rb.lines)       # 新图元插在最后一条走线后面
+        last = max(i for _, _, i in self.prj.pcb['rows'])  # 新图元追加在PCB文档的最后
         res = []
         for i, l in enumerate(self.lines):
             if l is not None: res.append(l)
             if i == last: res += self.new
+        # 原文件的约定: 每条记录以'|'结尾, 只有全文件最后一条不带. 保持一致
+        bare_end = not self.prj.lines[-1].endswith('|')
+        res = [l if l.endswith('|') else l + '|' for l in res]
+        if bare_end: res[-1] = res[-1][:-1]
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zo:
             for it in self.prj.zip.infolist():
@@ -202,6 +292,37 @@ def apply_fixes(ed):
     ed.move('5aad7f488b78926d', (27.125, 49.075), (26.670, 49.530), (26.925, 49.175), (26.670, 49.430))
     ed.move('6d99ac63fc027a4b', (26.670, 49.530), (13.335, 49.530), (26.670, 49.430), (13.235, 49.430))
     ed.move('a48ea9441e7639ae', (13.335, 49.530), (12.700, 48.895), (13.235, 49.430), (12.700, 48.895))
+    # 5. 顶层 ADC2 进芯片前的那个小拐弯左移0.07mm: 它和ADC1的间距 0.127mm -> 0.197mm (第3条把DBG_TX挪开后腾出了位置)
+    ed.move('ceb4bf69d33f8240', (28.067, 39.116), (27.559, 39.624), (28.067, 39.116), (27.489, 39.694))
+    ed.move('ec3a2448fceefb34', (27.559, 39.624), (27.559, 39.878), (27.489, 39.694), (27.489, 39.878))
+    ed.move('8e3c021343652ed6', (27.559, 39.878), (27.379, 40.058), (27.489, 39.878), (27.309, 40.058))
+    ed.move('68ed507c3bcf95ab', (27.379, 40.058), (26.498, 40.058), (27.309, 40.058), (26.498, 40.058))
+    # 6. 传感器的12V原来是从二极管D3的焊盘上引出去的, 改成从输出电容C3的焊盘引出(从板子东侧绕下来).
+    #    二极管到电容这一小段铜线上流的是每个开关周期一次的脉冲电流, 从这段线中间取电会把开关尖峰直接带给传感器;
+    #    规矩是: 二极管 -> 输出电容 -> 负载, 负载从电容的焊盘上取电
+    ed.remove('95856dac68c4178c', '339bb872623ce4b0')
+    pts = [(45.493, 10.000), (46.700, 10.000), (47.200, 10.500), (47.200, 15.000), (46.700, 15.500), (44.825, 15.500), (43.900, 16.425)]
+    for a, b in zip(pts, pts[1:]): ed.add_line('+12V', TOP, a, b, 30)
+
+
+def add_ground_vias(ed):
+    """补地过孔(位置由程序在目标点附近找, 保证两层都离别的网络0.25mm以上 不压焊盘 不压丝印字)"""
+    ed.prepare()
+    P = {f"{q['ref']}.{q['num']}": (round(q['x'], 3), round(q['y'], 3)) for q in ed.rb.pads}
+    # 升压输入电容C2的地脚: 原来只靠一条4.7mm的顶层线绕到C4旁边才下到底层地. 开关电流的回路是 C2 -> L1 -> U3 -> 地 -> C2, 地这一段越短越好
+    #   C2地脚本来就有一条0.76mm的顶层地线通到C4地脚, 两个过孔直接打在这条线上
+    ed.gnd_via_near((33.2, 14.6), 'C2地脚(打在原有的地线上)'); ed.gnd_via_near((33.655, 12.8), 'C2/C4之间的地线上')
+    # U3和L1之间那块顶层地铜皮被+5V线 开关节点和电感焊盘围住, 里面一个过孔都没有
+    ed.gnd_via_near((36.3, 14.5), '升压区顶层地'); ed.gnd_via_near((38.8, 14.8), '升压区顶层地')
+    # 稳压芯片U2的地脚和输出电容C12的地脚旁边没有过孔
+    ed.gnd_via_near((21.6, 18.288), 'U2地脚', pad=P['U2.2'], w_mil=12)
+    ed.gnd_via_near((29.275, 18.75), 'C12地脚', pad=P['C12.2'], w_mil=12)
+    # 防浪涌二极管D1的地脚: 浪涌电流要就近进地平面
+    ed.gnd_via_near((12.7, 15.7), 'D1地脚', pad=P['D1.2'], w_mil=20)
+    # 模拟前端下面的底层地被3V3线和NRST线围了一圈, 只剩一个2.5mm的口子和3个过孔与外面相连, 补几个过孔把它和顶层地缝起来
+    ed.gnd_vias_in((28.6, 34.0, 38.6, 45.6), 6, '模拟区地', spacing=2.0)
+    # 板子东边(升压区右侧)一个地过孔都没有
+    ed.gnd_vias_in((48.0, 8.5, 49.0, 21.0), 3, '东侧地', spacing=2.5)
 
 
 # 引脚名: 按网络取名, 所以即使以后原理图里调换了引脚, 重新运行也不会标错
@@ -251,16 +372,26 @@ def add_labels(ed):
     for ref in ('TP1', 'TP2', 'TP3', 'TP4', 'TP5', 'TP6'):
         around(ref, NET_NAME[pads[ref][0]['net']])
     around('SW1', 'RST')
-    # 三个直插排针: 顶层紧挨着别的元件放不下字, 写在底层(镜像, 从背面看是正的), 字在引脚靠板内一侧
+    # 三个直插排针: 完整的一套引脚名写在底层(镜像, 从背面看是正的), 字在引脚靠板内一侧.
+    # 顶层紧挨着排针就是别的元件, 只有部分引脚旁边有空位: 能放下的也在顶层放一份(首脚放不下就放在排针上方, 末脚放不下就放在下方)
+    top_done = []
     for ref in ('H1', 'H2', 'H3'):
         inner = 1 if pads[ref][0]['x'] < rb.W / 2 else -1; gnd = 0
-        for q in sorted(pads[ref], key=lambda q: int(q['num'])):
+        ps = sorted(pads[ref], key=lambda q: int(q['num'])); x0, y0, x1, y1 = boxes[ref]
+        for k, q in enumerate(ps):
             s = NET_NAME[q['net']]
             if ref != 'H1' and s == 'GND':
                 gnd += 1
                 if gnd == 2: s = 'SHD'          # 传感器第3脚接屏蔽线(板上也是地)
             h = 1.0; W = text_size(s, h)
             put(s, q['x'] + inner * (q['w'] / 2 + 0.4 + W / 2), q['y'], h, BOT_SILK)
+            cand = [((x1 + 0.3 + W / 2) if inner > 0 else (x0 - 0.3 - W / 2), q['y'])]
+            if k == 0: cand.append((q['x'], y0 - 0.3 - h / 2))
+            if k == len(ps) - 1: cand.append((q['x'], y1 + 0.3 + h / 2))
+            for c in cand:
+                if free(text_box(s, *c, h), TOP_SILK) is None:
+                    ed.text(s, *c, h, TOP_SILK); top_done.append(f"{ref}.{q['num']}={s}"); break
+    ed.log.append("排针顶层能放下的引脚名: " + ' '.join(top_done))
     return problems
 
 
@@ -286,17 +417,21 @@ def preview(ed, out_dir):
 
 
 def main():
-    src, out = sys.argv[1], sys.argv[2]; pv = sys.argv[3] if len(sys.argv) > 3 else None
-    ed = Editor(src)
-    apply_fixes(ed)
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]; no_pour = '--no-pour' in sys.argv
+    src, out = args[0], args[1]; pv = args[2] if len(args) > 2 else None
+    tmp = out + '.tmp'
+    e1 = Editor(src); apply_fixes(e1); e1.save(tmp)          # 第一步: 改线. 存一遍再读回来, 第二步找过孔位置时看到的就是改完线的板子
+    ed = Editor(tmp); os.remove(tmp)
     ed.hide_designators()
     problems = add_labels(ed)
-    ed.pours(drop=('POUR3', 'POUR4'))
+    add_ground_vias(ed)
+    ed.pours(drop=('POUR3', 'POUR4'), drop_all=no_pour)
     ed.save(out)
-    print('\n'.join(ed.log)); print(f"加引脚丝印 {len(ed.labels)} 处: " + ' '.join(f"{s}" for _, s, *_ in ed.labels))
+    print('\n'.join(e1.log + ed.log)); print(f"加引脚丝印 {len(ed.labels)} 处: " + ' '.join(f"{s}" for _, s, *_ in ed.labels))
     for p in problems: print('!! 丝印冲突:', p)
     if pv: os.makedirs(pv, exist_ok=True); preview(ed, pv)
     # 验证: 重新读入输出文件, 模拟重建铺铜后检查连通 短路 间距 悬空线头
+    if no_pour: print('已写出(无铺铜版)', out); return
     rb = RV.Routed(out).build().simulate_pour()
     opens = rb.connectivity(); cl = rb.clearance(0.16); dang = rb.dangling()
     print(f"\n== 验证(模拟重建铺铜) ==\n未连通网络 {len(opens)} 个: {opens}")
