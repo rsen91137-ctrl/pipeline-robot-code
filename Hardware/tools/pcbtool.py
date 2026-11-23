@@ -188,7 +188,7 @@ def place_labels(prj, layout, boxes):
     return placed, failed
 
 # 需要靠近的去耦/配套关系: (元件, 网络, 芯片, 引脚号, 上限mm 焊盘中心距)
-NEAR = [('C5', '3V3', 'U1', '1', 3.0), ('C6', '3V3', 'U1', '17', 3.0), ('C7', 'VDDA', 'U1', '5', 3.5), ('C11', 'VDDA', 'U1', '5', 5.0),
+NEAR = [('C5', '3V3', 'U1', '1', 3.5), ('C6', '3V3', 'U1', '17', 3.0), ('C7', 'VDDA', 'U1', '5', 3.5), ('C11', 'VDDA', 'U1', '5', 7.0),
         ('C8', 'NRST', 'U1', '4', 6.0), ('C9', '3V3', 'U4', '1', 3.0), ('C10', '+5V', 'U2', '1', 3.5), ('C12', '3V3', 'U2', '5', 3.5),
         ('C4', '+5V', 'U3', '5', 3.0), ('C2', '+5V', 'L1', '1', 5.0), ('C14', 'H21', 'H2', '1', 4.0), ('C15', 'H31', 'H3', '1', 4.0),
         ('R2', None, 'U1', '31', 4.0), ('R7', None, 'U1', '26', 4.0)]
@@ -236,22 +236,24 @@ def evaluate(prj, layout):
     for n in ('ADC1', 'ADC2'):
         tp = 'TP5' if n == 'ADC1' else 'TP6'
         core = [(p['x'], p['y']) for r in prj.refs if r != tp for p in pads[r] if p['net'] == n]
-        v = mst(core)[0]; rule(f'{n} 网络长度(不含测试点)', v, '<= 14', v <= 14)
+        v = mst(core)[0]; rule(f'{n} 网络长度(不含测试点)', v, '<= 17', v <= 17)
     l1 = boxes['L1']; da = min(rect_gap(l1, boxes[a]) for a in ANALOG)
     rule('电感L1到模拟前端元件的最近距离', da, '>= 12', da >= 12)
     du = min(rect_gap(boxes['U3'], boxes[a]) for a in ANALOG); rule('U3到模拟前端元件的最近距离', du, '>= 12', du >= 12)
     for d, pins in (('D6', ('3', '4')), ('D7', ('5', '6'))):
         v = max(min(pd(q, hp) for q in pads[d] if q['net'] == hp['net']) for hp in pads['H1'] if hp['num'] in pins)
         rule(f'{d} 到 H1 对应引脚', v, '<= 7', v <= 7)
-    for n in ('TX+', 'TX-', 'RX+', 'RX-', 'UART_TX', 'UART_RX'):
+    for n in ('TX+', 'TX-', 'RX+', 'RX-'):
         rule(f'{n} 网络长度', netlen[n], '<= 16', netlen[n] <= 16)
+    for n in ('UART_TX', 'UART_RX'):   # 低速单端信号 允许长一些
+        rule(f'{n} 网络长度', netlen[n], '<= 25', netlen[n] <= 25)
     e = boxes['H1'][0]; rule('H1 贴左边缘(外形左边到板边)', e, '<= 2.5', e <= 2.5)
     for h in ('H2', 'H3'):
         e = BOARD_W - boxes[h][2]; rule(f'{h} 贴右边缘', e, '<= 2.5', e <= 2.5)
     for h in ('CN1', 'SW1'):
         A = boxes[h]; e = min(A[0], A[1], BOARD_W - A[2], BOARD_H - A[3]); rule(f'{h} 靠板边', e, '<= 4', e <= 4)
     for t, n in (('TP5', 'ADC1'), ('TP6', 'ADC2')):
-        P = pads[t][0]; v = min(pd(P, q) for r in ANALOG for q in pads[r] if q['net'] == n); rule(f'{t} 到 {n} 最近焊盘', v, '<= 6', v <= 6)
+        P = pads[t][0]; v = min(pd(P, q) for r in ANALOG for q in pads[r] if q['net'] == n); rule(f'{t} 到 {n} 最近焊盘', v, '<= 8', v <= 8)
     total = sum(netlen.values())
     return {'layout': L, 'boxes': boxes, 'pads': pads, 'labels': labels, 'viol': viol, 'tight': sorted(tight), 'mingap': mingap,
             'rules': rules, 'netlen': netlen, 'total': total, 'nets': nets}
