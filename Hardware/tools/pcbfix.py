@@ -8,7 +8,11 @@
   4. 删掉重复的铺铜区 清空铺铜填充 —— 导入后必须重建铺铜(Shift+B)
 
 用法: python3 pcbfix.py 输入.epro2 输出.epro2 [预览图目录] [--no-pour]
+      输入必须是 已布线工程_原版.epro2: 改线部分(apply_fixes)是按那个文件里走线的编号和坐标写死的, 不能用在别的版本上, 也不能对改过的文件再跑一遍
       --no-pour: 把铺铜区整个删掉(备用: 万一清空填充的文件导入不了, 用这个版本, 导入后自己重画两块整板GND铺铜)
+      python3 pcbfix.py 任意版本.epro2 输出.epro2 [预览图目录] --labels-only [--replace-silk]
+      --labels-only: 只隐藏位号 + 画引脚名, 不动走线 过孔 铺铜. 以后挪了元件想重新排引脚名就用这个.
+                     工程里已经有丝印折线(比如上次生成的引脚名)时要加 --replace-silk, 会先把PCB上顶层/底层丝印的折线全部删掉再画
 坐标约定: 毫米, 原点在板子左上角, y向下 (与 pcbreview.py 的 geometry.json 一致)
 """
 import sys, os, io, json, math, random, zipfile
@@ -91,8 +95,18 @@ class Editor:
             if h['type'] == 'TEARDROP':
                 for r in b.get('refs', []): self.tears.setdefault(r, []).append(i)
         self.labels = []                      # (层, 文字, 外框, 笔画)
+        # 已有走线端点和过孔中心的精确坐标(mil). 新线接到它们上面时直接用原值, 不经过毫米换算, 免得端点之间出现零点几微米的错位
+        self.known = []
+        for h, b, i in self.prj.pcb['rows']:
+            if h['type'] == 'LINE': self.known += [(b['startX'], b['startY']), (b['endX'], b['endY'])]
+            elif h['type'] == 'VIA': self.known.append((b['centerX'], b['centerY']))
 
-    def mil(self, x, y): return (num(self.prj.ox + x / MIL), num(self.prj.oy - y / MIL))
+    def mil(self, x, y, snap=True):
+        mx, my = self.prj.ox + x / MIL, self.prj.oy - y / MIL
+        if snap and self.known:
+            p = min(self.known, key=lambda p: abs(p[0] - mx) + abs(p[1] - my))
+            if math.hypot(p[0] - mx, p[1] - my) < 0.04: return p          # 0.04mil = 1微米以内视为同一点
+        return (num(mx), num(my))
 
     def _edit(self, row, fn):
         head, _, body = self.lines[row].partition('||'); tail = '|' if body.endswith('|') else ''
@@ -115,8 +129,9 @@ class Editor:
         """把走线lid从 a0->b0 改成 a1->b1 (先核对原来的端点, 防止改错线)"""
         l = self.item[lid]
         assert math.dist(l['a'], a0) < 0.01 and math.dist(l['b'], b0) < 0.01, (lid, l['a'], l['b'])
-        def fn(b):
-            b['startX'], b['startY'] = self.mil(*a1); b['endX'], b['endY'] = self.mil(*b1)
+        def fn(b):       # 没挪的那一头原样保留
+            if math.dist(a0, a1) > 1e-6: b['startX'], b['startY'] = self.mil(*a1)
+            if math.dist(b0, b1) > 1e-6: b['endX'], b['endY'] = self.mil(*b1)
         self._edit(l['row'], fn); self._drop_tears(lid)
         self.log.append(f"改线 {l['net']} 层{l['layer']} ({a0[0]},{a0[1]})->({b0[0]},{b0[1]})  =>  ({a1[0]},{a1[1]})->({b1[0]},{b1[1]})")
 
@@ -159,9 +174,9 @@ class Editor:
             self.pad_bbox[q['ref']] = (min(b[0], q['x'] - q['w'] / 2), min(b[1], q['y'] - q['h'] / 2), max(b[2], q['x'] + q['w'] / 2), max(b[3], q['y'] + q['h'] / 2))
 
     def via_ok(self, x, y, clear=0.25, pad_gap=0.2, pitch=0.9, r=0.305):
-        """(x,y)能不能打一个地过孔: 两层都离别的网络>=clear 不压任何焊盘 离别的过孔>=pitch 离板边>=1mm 不压丝印字"""
+        """(x,y)能不能打一个地过孔: 两层都离别的网络>=clear 不压任何焊盘 不在元件肚子底下 离别的过孔>=pitch 焊盘边离板边>=1mm 不压丝印字"""
         PX = RV.PX; i, j = int(y * PX), int(x * PX)
-        if not (0 <= i < self.rb.M and 0 <= j < self.rb.N) or self.d_edge[i, j] < 1.0: return False
+        if not (0 <= i < self.rb.M and 0 <= j < self.rb.N) or self.d_edge[i, j] < 1.0 + r: return False
         for layer in (TOP, BOT):
             if self.d_other[layer][i, j] < r + clear or self.d_pad[layer][i, j] < r + pad_gap: return False
         if any(hit((x - r, y - r, x + r, y + r), b, 0.15) for _, _, b, *_ in self.labels): return False
@@ -230,7 +245,7 @@ class Editor:
         for pts in strokes:
             path = []
             for k, (x, y) in enumerate(pts):
-                mx, my = self.mil(x, y)
+                mx, my = self.mil(x, y, snap=False)
                 if k == 1: path.append('L')
                 path += [mx, my]
             self._add('POLY', {"partitionId": "", "groupId": 0, "netName": "", "layerId": layer, "width": stroke_mil, "path": path,
@@ -301,7 +316,8 @@ def apply_fixes(ed):
     #    二极管到电容这一小段铜线上流的是每个开关周期一次的脉冲电流, 从这段线中间取电会把开关尖峰直接带给传感器;
     #    规矩是: 二极管 -> 输出电容 -> 负载, 负载从电容的焊盘上取电
     ed.remove('95856dac68c4178c', '339bb872623ce4b0')
-    pts = [(45.493, 10.000), (46.700, 10.000), (47.200, 10.500), (47.200, 15.000), (46.700, 15.500), (44.825, 15.500), (43.900, 16.425)]
+    #    竖线贴着C3 D3的焊盘边走(x=46.75): 中间不留缝, 重铺铜时这里就不会夹出一条又细又长的死胡同地铜皮
+    pts = [(45.493, 10.000), (46.250, 10.000), (46.750, 10.500), (46.750, 15.000), (46.250, 15.500), (44.825, 15.500), (43.900, 16.425)]
     for a, b in zip(pts, pts[1:]): ed.add_line('+12V', TOP, a, b, 30)
 
 
@@ -314,6 +330,8 @@ def add_ground_vias(ed):
     ed.gnd_via_near((33.2, 14.6), 'C2地脚(打在原有的地线上)'); ed.gnd_via_near((33.655, 12.8), 'C2/C4之间的地线上')
     # U3和L1之间那块顶层地铜皮被+5V线 开关节点和电感焊盘围住, 里面一个过孔都没有
     ed.gnd_via_near((36.3, 14.5), '升压区顶层地'); ed.gnd_via_near((38.8, 14.8), '升压区顶层地')
+    # D3下方 开关节点旁边那一小块顶层地铜皮, 也给一个过孔
+    ed.gnd_via_near((43.7, 14.6), 'D3下方顶层地')
     # 稳压芯片U2的地脚和输出电容C12的地脚旁边没有过孔
     ed.gnd_via_near((21.6, 18.288), 'U2地脚', pad=P['U2.2'], w_mil=12)
     ed.gnd_via_near((29.275, 18.75), 'C12地脚', pad=P['C12.2'], w_mil=12)
@@ -419,6 +437,18 @@ def preview(ed, out_dir):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]; no_pour = '--no-pour' in sys.argv
     src, out = args[0], args[1]; pv = args[2] if len(args) > 2 else None
+    if '--labels-only' in sys.argv:
+        ed = Editor(src)
+        old = [i for h, b, i in ed.prj.pcb['rows'] if h['type'] == 'POLY' and b.get('layerId') in (TOP_SILK, BOT_SILK)]
+        if old and '--replace-silk' not in sys.argv:
+            sys.exit(f"工程的PCB上已经有{len(old)}条丝印折线(可能是上次生成的引脚名). 确认要全部删掉重画的话, 加上 --replace-silk")
+        for i in old: ed.lines[i] = None
+        if old: ed.log.append(f"删除原有的丝印折线 {len(old)} 条")
+        ed.hide_designators(); problems = add_labels(ed); ed.save(out)
+        print('\n'.join(ed.log)); print(f"加引脚丝印 {len(ed.labels)} 处: " + ' '.join(s for _, s, *_ in ed.labels))
+        for p in problems: print('!! 丝印冲突:', p)
+        if pv: os.makedirs(pv, exist_ok=True); preview(ed, pv)
+        print('已写出(只改丝印, 走线和铺铜没有动)', out); return
     tmp = out + '.tmp'
     e1 = Editor(src); apply_fixes(e1); e1.save(tmp)          # 第一步: 改线. 存一遍再读回来, 第二步找过孔位置时看到的就是改完线的板子
     ed = Editor(tmp); os.remove(tmp)
